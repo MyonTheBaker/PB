@@ -1,0 +1,4 @@
+interface:
+  display_name: "Park Bäckerei Payslips"
+  short_description: "Generate branded payroll and leave payslips"
+  default_prompt: "Use $park-payslip to generate and validate a branded employee payslip."

@@ -1,0 +1,5 @@
+pandas==2.3.3
+openpyxl==3.1.5
+paramiko==4.0.0
+PyQt5==5.15.11
+cryptography==46.0.3
