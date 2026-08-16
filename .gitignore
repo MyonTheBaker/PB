@@ -8,6 +8,8 @@ TEST/
 exports/
 review_previews/
 tmp_preview/
+artifacts/
+tmp/
 data/
 *.db
 *.db-*

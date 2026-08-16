@@ -1,0 +1,14 @@
+:root { font-family: system-ui, sans-serif; color: #18201d; }
+body { margin: 0; min-width: 330px; background: #f5f8f6; }
+main { padding: 18px; }
+h1 { margin: 0 0 8px; font-size: 20px; }
+p { line-height: 1.4; }
+.target { margin: 0 0 16px; color: #3b4742; }
+button { width: 100%; border: 0; border-radius: 8px; padding: 11px 14px; background: #0b8f55; color: white; font-weight: 700; cursor: pointer; }
+button:disabled { background: #94a39c; cursor: wait; }
+.secondary { margin-top: 8px; background: #344840; }
+#status { min-height: 42px; margin: 14px 0 0; font-size: 13px; }
+#status.error { color: #b42318; }
+#status.warning { color: #8a5a00; }
+#status.ok { color: #067647; }
+.note { margin: 8px 0 0; color: #66726d; font-size: 11px; }

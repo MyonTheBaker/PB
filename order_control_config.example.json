@@ -1,0 +1,12 @@
+{
+  "business_name": "Park Bäckerei",
+  "chat_title": "Orders",
+  "email_ingestion": {
+    "enabled": true,
+    "host": "imap.gmail.com",
+    "port": 993,
+    "username": "orders@example.com",
+    "mailbox": "INBOX",
+    "password_env": "ORDER_CONTROL_EMAIL_PASSWORD"
+  }
+}

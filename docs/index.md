@@ -23,6 +23,13 @@ This page is the entry point for operators, HR reviewers, payroll approvers, and
 2. Use the [Repository map](repository-map.md) to locate code.
 3. Follow [Development](development.md) before changing schema or calculations.
 
+### Consolidate preorder evidence
+
+1. Configure and launch the [Order Control Tower](order-control-tower.md).
+2. Refresh the selected evidence sources.
+3. Review the next-business-day week and any items flagged for operator review.
+4. Approve a generated overview separately before posting it to WhatsApp.
+
 ## Documentation set
 
 - [Architecture](architecture.md) — boundaries, components, and data flow.
@@ -32,3 +39,4 @@ This page is the entry point for operators, HR reviewers, payroll approvers, and
 - [Operations](operations.md) — setup, launchers, validation, and recovery.
 - [Security](security.md) — sensitive data, Git exclusions, and release controls.
 - [Development](development.md) — environment, migrations, and verification.
+- [Order Control Tower](order-control-tower.md) — architecture, Gmail setup, evidence ingestion, reconciliation, weekly reports, and operational limits.

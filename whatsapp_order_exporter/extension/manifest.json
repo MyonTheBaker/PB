@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Park Bäckerei WhatsApp Order Capture",
+  "version": "0.4.0",
+  "description": "Read-only capture of the PB Advance Orders chat to a local archive.",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "http://127.0.0.1:8765/*"
+  ],
+  "action": {
+    "default_title": "Capture PB Advance Orders",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

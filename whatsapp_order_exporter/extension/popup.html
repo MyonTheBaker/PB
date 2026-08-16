@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Order Capture</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1>Order Capture</h1>
+    <p class="target">Target: <strong>PB Advance Orders</strong></p>
+    <button id="capture" type="button">Capture visible messages</button>
+    <button id="history" class="secondary" type="button">Capture loaded history</button>
+    <button id="media" class="secondary" type="button">Capture full media</button>
+    <p id="status" role="status">Receiver check pending.</p>
+    <p class="note">Loaded history scrolls upward without sending messages. Keep this popup open until it finishes.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
