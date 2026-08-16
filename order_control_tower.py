@@ -3,21 +3,28 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
+import urllib.error
+import urllib.request
+import uuid
 from datetime import date, timedelta
 from pathlib import Path
 
-from PyQt5.QtCore import QProcess, QSize, Qt, QTimer
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtCore import QProcess, QSize, Qt, QTimer, QUrl
+from PyQt5.QtGui import QDesktopServices, QPixmap
 from PyQt5.QtWidgets import (
     QAction, QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu,
-    QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
+    QMessageBox, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
 )
 
 
 PROJECT = Path(__file__).resolve().parent
 DATA_ROOT = PROJECT / "data" / "whatsapp-order-control"
 REPORTS = DATA_ROOT / "reports"
+NAVIGATION_REQUEST = PROJECT / "tmp" / "control_tower_navigation.json"
+CAPTURE_RECEIVER = PROJECT / "whatsapp_order_exporter" / "receiver.py"
+WHATSAPP_WEB = QUrl("https://web.whatsapp.com/")
 SOURCE_LABELS = {"whatsapp": "WhatsApp", "email": "Email", "web": "Web Crawler"}
 
 
@@ -30,6 +37,55 @@ def next_business_day(value: date) -> date:
     while candidate.weekday() >= 5:
         candidate += timedelta(days=1)
     return candidate
+
+
+def write_navigation_request(path: Path, page: int) -> None:
+    """Atomically ask the already-running HR Control Tower to show a page."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps({"page": page}), encoding="utf-8")
+    temporary.replace(path)
+
+
+def receiver_is_ready(timeout: float = 0.4) -> bool:
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8765/health", timeout=timeout) as response:
+            return response.status == 200
+    except (OSError, urllib.error.URLError):
+        return False
+
+
+def record_post_preparation(root: Path, report: Path, week_start: date,
+                            target_chat: str | None) -> str:
+    """Record the selected report in the approval outbox without claiming it was sent."""
+    connection = sqlite3.connect(root / "order-control.sqlite3")
+    artifact_id, outbox_id = str(uuid.uuid4()), str(uuid.uuid4())
+    week_end = week_start + timedelta(days=6)
+    with connection:
+        connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS artifacts(
+             id TEXT PRIMARY KEY, created_at TEXT NOT NULL, period_start TEXT NOT NULL,
+             period_end TEXT NOT NULL, kind TEXT NOT NULL, path TEXT NOT NULL,
+             source_synthesis_ids_json TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS outbox(
+             id TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id),
+             target_chat TEXT, status TEXT NOT NULL, created_at TEXT NOT NULL, sent_at TEXT
+            );
+            """
+        )
+        connection.execute(
+            "INSERT INTO artifacts VALUES(?,?,?,?,?,?,?)",
+            (artifact_id, date.today().isoformat(), week_start.isoformat(), week_end.isoformat(),
+             "png", str(report.resolve()), "[]"),
+        )
+        connection.execute(
+            "INSERT INTO outbox VALUES(?,?,?,?,?,NULL)",
+            (outbox_id, artifact_id, target_chat, "prepared_for_operator", date.today().isoformat()),
+        )
+    connection.close()
+    return outbox_id
 
 
 class OverviewLabel(QLabel):
@@ -140,6 +196,14 @@ class OrderControlTower(QMainWindow):
         outer.setSpacing(14)
 
         heading = QHBoxLayout()
+        self.back_button = QPushButton("← Back to Control Tower")
+        self.back_button.setToolTip("Return to the Pre-Orders page in the HR Control Tower")
+        self.back_button.setStyleSheet(
+            "padding: 9px 14px; background: white; border: 1px solid #d5d1ca; "
+            "border-radius: 7px; font-weight: 600;"
+        )
+        self.back_button.clicked.connect(self.back_to_control_tower)
+        heading.addWidget(self.back_button)
         title = QLabel("ORDER CONTROL TOWER")
         title.setStyleSheet("font-size: 25px; font-weight: 800; letter-spacing: 1px;")
         heading.addWidget(title)
@@ -149,6 +213,16 @@ class OrderControlTower(QMainWindow):
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.setStyleSheet("padding: 9px 22px; color: white; background: #b7362d; border: 0; border-radius: 7px; font-weight: 700;")
         self.refresh_button.clicked.connect(self.refresh_orders)
+        self.capture_button = QPushButton("Capture WhatsApp")
+        self.capture_button.setToolTip("Start the local receiver and open WhatsApp Web for supervised extraction")
+        self.capture_button.setStyleSheet("padding: 9px 16px; background: white; border: 1px solid #d5d1ca; border-radius: 7px; font-weight: 700;")
+        self.capture_button.clicked.connect(self.start_whatsapp_capture)
+        self.post_button = QPushButton("Post selected week")
+        self.post_button.setToolTip("Prepare the overview currently displayed for an approved WhatsApp post")
+        self.post_button.setStyleSheet("padding: 9px 16px; color: white; background: #207a5b; border: 0; border-radius: 7px; font-weight: 700;")
+        self.post_button.clicked.connect(self.prepare_whatsapp_post)
+        heading.addWidget(self.capture_button)
+        heading.addWidget(self.post_button)
         heading.addWidget(self.source_selector)
         heading.addWidget(self.refresh_button)
         outer.addLayout(heading)
@@ -185,6 +259,62 @@ class OrderControlTower(QMainWindow):
 
         self.load_week()
         QTimer.singleShot(0, self.refresh_orders)
+
+    def back_to_control_tower(self) -> None:
+        write_navigation_request(NAVIGATION_REQUEST, 3)
+        self.close()
+
+    def start_whatsapp_capture(self) -> None:
+        if not CAPTURE_RECEIVER.exists():
+            QMessageBox.critical(self, "Capture unavailable", "The WhatsApp capture receiver is missing.")
+            return
+        if not receiver_is_ready():
+            started, _pid = QProcess.startDetached(
+                sys.executable, [str(CAPTURE_RECEIVER), "--data-root", str(DATA_ROOT / "browser")],
+                str(PROJECT),
+            )
+            if not started:
+                QMessageBox.critical(self, "Capture unavailable", "The local WhatsApp receiver could not be started.")
+                return
+        QDesktopServices.openUrl(WHATSAPP_WEB)
+        self.status.setText("WhatsApp capture is ready. Open PB Advance Orders, then use the extension for full media and loaded history.")
+        QMessageBox.information(
+            self, "WhatsApp capture started",
+            "WhatsApp Web has been opened and the local receiver is running.\n\n"
+            "1. Open PB Advance Orders.\n2. Run Capture full media in the extension.\n"
+            "3. Run Capture loaded history.\n4. Return here and Refresh with WhatsApp enabled.",
+        )
+
+    def prepare_whatsapp_post(self) -> None:
+        report = self.report_for_week()
+        if not report or not report.exists():
+            QMessageBox.warning(self, "No overview", "No generated overview is available for the selected week.")
+            return
+        week_end = self.week_start + timedelta(days=6)
+        answer = QMessageBox.question(
+            self, "Prepare WhatsApp post",
+            f"Prepare the overview for {self.week_start:%d %b} – {week_end:%d %b %Y}?\n\n"
+            "The image will be copied to the clipboard and WhatsApp Web will open. "
+            "Verify the destination chat and image before pressing Send.",
+            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        pixmap = QPixmap(str(report))
+        if pixmap.isNull():
+            QMessageBox.critical(self, "Cannot prepare post", "The selected overview image could not be loaded.")
+            return
+        config_path = DATA_ROOT / "config.json"
+        config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
+        outbox_id = record_post_preparation(DATA_ROOT, report, self.week_start, config.get("chat_title"))
+        QApplication.clipboard().setPixmap(pixmap)
+        QDesktopServices.openUrl(WHATSAPP_WEB)
+        self.status.setText(f"Selected week copied for WhatsApp (outbox {outbox_id[:8]}). Paste with Ctrl+V, verify, then send.")
+        QMessageBox.information(
+            self, "Selected week ready",
+            "The selected overview is on the clipboard. In WhatsApp Web, open the approved order channel, "
+            "press Ctrl+V, verify the preview and week, then press Send.",
+        )
 
     def _arrow(self, text: str, tooltip: str) -> QToolButton:
         button = QToolButton()

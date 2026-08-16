@@ -8,6 +8,7 @@ from pathlib import Path
 
 from order_email_ingest import sync as sync_email
 from email_order_processor import process_pending
+from whatsapp_order_exporter.import_browser_capture import import_capture
 
 
 VALID_SOURCES = {"whatsapp", "email", "web"}
@@ -29,10 +30,24 @@ def refresh(root: Path, sources: list[str]) -> dict:
             except Exception as exc:
                 results.append({"source": source, "status": "error", "message": f"Email: {exc}"})
         elif source == "whatsapp":
-            results.append({
-                "source": source, "status": "manual_capture_required",
-                "message": "WhatsApp: use the supervised capture extension, then refresh",
-            })
+            try:
+                imported = import_capture(root / "browser", root, None, None)
+                results.append({
+                    "source": source, "status": "ok",
+                    "message": (f"WhatsApp: imported {imported['messages']} message(s) and "
+                                f"{imported['media']} media file(s) from the latest capture"),
+                })
+            except SystemExit as exc:
+                detail = str(exc)
+                status = "up_to_date" if "already imported" in detail else "capture_required"
+                message = ("WhatsApp: latest capture is already imported" if status == "up_to_date"
+                           else "WhatsApp: start Capture WhatsApp and complete the extension capture")
+                results.append({"source": source, "status": status, "message": message})
+            except Exception:
+                results.append({
+                    "source": source, "status": "capture_required",
+                    "message": "WhatsApp: start Capture WhatsApp and complete the extension capture",
+                })
         elif source == "web":
             results.append({
                 "source": source, "status": "not_configured",

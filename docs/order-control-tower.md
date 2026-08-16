@@ -9,7 +9,7 @@ Current integration status:
 | Source | Status | Refresh behaviour |
 |---|---|---|
 | Email | Operational | Read-only Gmail IMAP sync, archive, deduplication, extraction, reconciliation, and report regeneration |
-| WhatsApp | Supervised | Browser extension capture and local import; the Refresh action explains when a new capture is required |
+| WhatsApp | Supervised | The tower starts the receiver/browser workflow; Refresh imports the latest completed extension capture |
 | CaterSpot / Oddle | Planned | UI option is present, but no authenticated first-party adapter is connected |
 
 The repository contains application code and sanitized configuration only. Mail, message history, attachments, databases, credentials, and generated report images are intentionally excluded from Git.
@@ -19,10 +19,14 @@ The repository contains application code and sanitized configuration only. Mail,
 1. Start the application with `run_order_control_tower.cmd`.
 2. The initial view opens the week containing the next business day and starts a refresh automatically.
 3. Use the source selector to choose Email, WhatsApp, Web Crawler, or all sources.
-4. Select **Refresh** to ingest new evidence from the enabled sources.
-5. Use the left and right arrows to inspect earlier or later preorder weeks.
-6. Review any source conflicts or records held for operator review before relying on the overview.
-7. Post an approved next-week overview separately. Refreshing does not publish to WhatsApp.
+4. Select **Capture WhatsApp** to start the local receiver and open WhatsApp Web. Run full-media capture before loaded-history capture in the extension, then return to the tower.
+5. Select **Refresh** to ingest new evidence from the enabled sources.
+6. Use the left and right arrows to inspect earlier or later preorder weeks.
+7. Select **Post selected week** to approve the week currently displayed, copy that exact PNG to the clipboard, and open WhatsApp Web. Paste with `Ctrl+V`, verify the chat and preview, and press Send.
+8. Use **Back to Control Tower** to return directly to the Pre-Orders page.
+9. Review any source conflicts or records held for operator review before relying on the overview.
+
+The posting handoff is intentionally visible. The tower records the selected report as `prepared_for_operator`; opening WhatsApp does not mark it as sent.
 
 Each day is shown as a report column. Every product or package starts on a new line; package headings use bold type, and package details appear below in regular type. When a column becomes tall, its fonts and spacing scale down, with a minimum scale of 50%.
 

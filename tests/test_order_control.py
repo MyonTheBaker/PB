@@ -6,7 +6,9 @@ from email.message import EmailMessage
 from pathlib import Path
 
 from email_order_processor import extract_order
+from order_control_tower import record_post_preparation, write_navigation_request
 from order_report_renderer import formatted_product_lines, operation_time, render_png, week_bounds
+from order_source_refresh import refresh
 
 
 class OrderControlTests(unittest.TestCase):
@@ -51,6 +53,34 @@ class OrderControlTests(unittest.TestCase):
             render_png(target, "Preorder Overview", "17-23 Aug", rows, date(2026, 8, 17))
             self.assertTrue(target.exists())
             self.assertGreater(target.stat().st_size, 1_000)
+
+    def test_back_navigation_targets_preorders_page_atomically(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "control_tower_navigation.json"
+            write_navigation_request(target, 3)
+            self.assertEqual(target.read_text(encoding="utf-8"), '{"page": 3}')
+            self.assertFalse(target.with_suffix(".tmp").exists())
+
+    def test_selected_week_is_recorded_without_claiming_it_was_sent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = root / "reports" / "orders-next-week-2026-08-17.png"
+            report.parent.mkdir()
+            report.write_bytes(b"png")
+            outbox_id = record_post_preparation(root, report, date(2026, 8, 17), "Orders")
+            connection = sqlite3.connect(root / "order-control.sqlite3")
+            row = connection.execute(
+                "SELECT o.status,o.sent_at,a.period_start,a.period_end,a.path "
+                "FROM outbox o JOIN artifacts a ON a.id=o.artifact_id WHERE o.id=?", (outbox_id,)
+            ).fetchone()
+            connection.close()
+            self.assertEqual(row[:4], ("prepared_for_operator", None, "2026-08-17", "2026-08-23"))
+            self.assertEqual(Path(row[4]), report.resolve())
+
+    def test_whatsapp_refresh_requests_capture_when_none_exists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = refresh(Path(directory), ["whatsapp"])
+            self.assertEqual(result["results"][0]["status"], "capture_required")
 
 
 if __name__ == "__main__":
