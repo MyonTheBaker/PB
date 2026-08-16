@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -24,6 +25,8 @@ DATA_ROOT = PROJECT / "data" / "whatsapp-order-control"
 REPORTS = DATA_ROOT / "reports"
 NAVIGATION_REQUEST = PROJECT / "tmp" / "control_tower_navigation.json"
 CAPTURE_RECEIVER = PROJECT / "whatsapp_order_exporter" / "receiver.py"
+HR_CONTROL_TOWER = PROJECT / "hr_control_tower.py"
+PYTHONW = PROJECT / ".venv" / "Scripts" / "pythonw.exe"
 WHATSAPP_WEB = QUrl("https://web.whatsapp.com/")
 SOURCE_LABELS = {"whatsapp": "WhatsApp", "email": "Email", "web": "Web Crawler"}
 
@@ -86,6 +89,37 @@ def record_post_preparation(root: Path, report: Path, week_start: date,
         )
     connection.close()
     return outbox_id
+
+
+def hr_control_tower_is_running() -> bool:
+    if sys.platform != "win32":
+        return False
+    escaped = str(HR_CONTROL_TOWER.resolve()).replace("'", "''")
+    command = (
+        f"$target='{escaped}'; "
+        "@(Get-CimInstance Win32_Process | Where-Object { "
+        "$_.Name -in @('python.exe','pythonw.exe') -and $_.CommandLine -and "
+        "$_.CommandLine.Contains($target) }).Count"
+    )
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command],
+            cwd=str(PROJECT), capture_output=True, text=True, timeout=5, check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return int(result.stdout.strip() or "0") > 0
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return False
+
+
+def start_hr_control_tower() -> bool:
+    if hr_control_tower_is_running():
+        return True
+    if not HR_CONTROL_TOWER.exists():
+        return False
+    executable = PYTHONW if PYTHONW.exists() else Path(sys.executable)
+    outcome = QProcess.startDetached(str(executable), [str(HR_CONTROL_TOWER)], str(PROJECT))
+    return bool(outcome[0] if isinstance(outcome, tuple) else outcome)
 
 
 class OverviewLabel(QLabel):
@@ -262,7 +296,13 @@ class OrderControlTower(QMainWindow):
 
     def back_to_control_tower(self) -> None:
         write_navigation_request(NAVIGATION_REQUEST, 3)
-        self.close()
+        if start_hr_control_tower():
+            self.close()
+            return
+        QMessageBox.critical(
+            self, "Control Tower unavailable",
+            "The main HR Control Tower could not be opened. This overview will remain open.",
+        )
 
     def start_whatsapp_capture(self) -> None:
         if not CAPTURE_RECEIVER.exists():
