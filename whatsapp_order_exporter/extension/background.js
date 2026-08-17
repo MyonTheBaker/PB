@@ -1,4 +1,5 @@
 const RECEIVER = "http://127.0.0.1:8765";
+const CAPTURE_PROTOCOL_VERSION = "0.6.1";
 let working = false;
 
 async function receiverPost(path, body) {
@@ -33,6 +34,10 @@ async function runNextJob() {
     if (!targetTab?.id) throw new Error("WhatsApp Web is not open.");
     const tabId = targetTab.id;
     await chrome.tabs.update(tabId, { active: true });
+    const version = await chrome.tabs.sendMessage(tabId, { type: "CAPTURE_VERSION" });
+    if (version?.version !== CAPTURE_PROTOCOL_VERSION) {
+      throw new Error("WhatsApp capture extension/page version mismatch. Reload the extension and WhatsApp Web once.");
+    }
     await capture(tabId, "OPEN_TARGET_CHAT", job.expected_chat);
     const incremental = await capture(tabId, "CAPTURE_INCREMENTAL", job.expected_chat, job.cutoff_at);
     const mediaResult = await receiverPost("/media-manifest", incremental.media_manifest);

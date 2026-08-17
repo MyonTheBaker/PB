@@ -1,4 +1,5 @@
 (() => {
+  const CAPTURE_PROTOCOL_VERSION = "0.6.1";
   const clean = (value) => (value || "").replace(/[\u200e\u200f\u2060]/g, "").trim();
   const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -262,9 +263,13 @@
   }
 
   chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-    if (!["OPEN_TARGET_CHAT", "CAPTURE_INCREMENTAL", "CAPTURE_VISIBLE_MESSAGES", "CAPTURE_LOADED_HISTORY", "CAPTURE_LOADED_MEDIA"].includes(request?.type)) return false;
+    if (!["CAPTURE_VERSION", "OPEN_TARGET_CHAT", "CAPTURE_INCREMENTAL", "CAPTURE_VISIBLE_MESSAGES", "CAPTURE_LOADED_HISTORY", "CAPTURE_LOADED_MEDIA"].includes(request?.type)) return false;
     (async () => {
       try {
+        if (request.type === "CAPTURE_VERSION") {
+          sendResponse({ ok: true, version: CAPTURE_PROTOCOL_VERSION });
+          return;
+        }
         let title = currentChatTitle();
         if (request.type === "OPEN_TARGET_CHAT") {
           if (title !== request.expectedChat) {
