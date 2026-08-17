@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 import textwrap
@@ -9,6 +10,108 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
+
+
+PLATTER_DICTIONARY_PATH = Path(__file__).with_name("caterspot_platter_dictionary.json")
+
+
+def _platter_dictionary() -> dict:
+    if not PLATTER_DICTIONARY_PATH.exists():
+        return {"platters": {}}
+    return json.loads(PLATTER_DICTIONARY_PATH.read_text(encoding="utf-8"))
+
+
+def _normalized(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
+
+
+def _number(value: float) -> str:
+    return f"{value:g}"
+
+
+def _ordered_quantity(heading: str) -> tuple[float, str]:
+    match = re.match(r"^(?P<quantity>\d+(?:\.\d+)?)\s*(?:x\s*)?(?P<name>.+)$", heading.strip(), re.I)
+    if not match:
+        return 1, heading.strip()
+    return float(match.group("quantity")), match.group("name").strip()
+
+
+def _match_platter(heading: str) -> tuple[str, dict] | None:
+    _, name = _ordered_quantity(heading)
+    normalized = _normalized(name)
+    for key, definition in _platter_dictionary().get("platters", {}).items():
+        names = [definition.get("canonical_name", ""), *definition.get("aliases", [])]
+        if any(_normalized(candidate) == normalized for candidate in names):
+            return key, definition
+    return None
+
+
+def _canonical_filling(value: str, definition: dict) -> str:
+    normalized = _normalized(re.sub(r"^\d+(?:\.\d+)?\s*x?\s*", "", value.strip(), flags=re.I))
+    aliases = {
+        "beat": "B.E.A.T",
+        "b e a t": "B.E.A.T",
+        "brie and caramelised pecans": "Brie",
+        "brie and caramelized pecans": "Brie",
+        "portobello pesto": "Portobello Pesto",
+        "portobello mushroom pesto": "Portobello Pesto",
+        "ham cheese": "Ham and Cheese",
+        "egg": "Egg Salad",
+    }
+    if normalized in aliases:
+        return aliases[normalized]
+    for choice in definition.get("choices", {}).get("fillings", []):
+        if _normalized(choice) == normalized:
+            return choice
+    return value.strip()
+
+
+def _filling_with_quantity(value: str, definition: dict) -> tuple[str, float | None]:
+    stripped = value.strip()
+    leading = re.match(r"^(?P<quantity>\d+(?:\.\d+)?)\s*(?:x\s*)?(?P<name>.+)$", stripped, re.I)
+    trailing = re.match(r"^(?P<name>.+?)\s+(?P<quantity>\d+(?:\.\d+)?)$", stripped)
+    match = leading or trailing
+    if not match:
+        return _canonical_filling(stripped, definition), None
+    return _canonical_filling(match.group("name"), definition), float(match.group("quantity"))
+
+
+def _expanded_platter(heading: str, details: str) -> tuple[str, list[str]] | None:
+    matched = _match_platter(heading)
+    if not matched:
+        return None
+    key, definition = matched
+    quantity, _ = _ordered_quantity(heading)
+    display = definition.get("overview_display", {})
+    display_heading = display.get("heading", definition["canonical_name"])
+    if quantity != 1:
+        display_heading = f"{_number(quantity)} {display_heading}"
+    else:
+        display_heading = f"1 {display_heading}"
+
+    if display.get("show_selected_fillings_only") or key == "pretzel_croissant_canape_platter":
+        fillings = [_filling_with_quantity(value, definition) for value in details.split(",") if value.strip()]
+        if not fillings:
+            return display_heading, []
+        pieces_per_platter = 24 if key == "mini_sandwiches_platter_c" else 16
+        inferred_pieces = quantity * pieces_per_platter / len(fillings)
+        return display_heading, [
+            f"{filling} {_number(explicit_pieces if explicit_pieces is not None else inferred_pieces)}"
+            for filling, explicit_pieces in fillings
+        ]
+
+    components = []
+    for component in definition.get("components", []):
+        component_quantity = float(component["quantity"]) * quantity
+        unit = component.get("unit", "")
+        quantity_label = _number(component_quantity)
+        if unit in {"g", "kg"}:
+            quantity_label += unit
+        unit_label = "" if unit in {"pcs", "portions", "packs", "g", "kg"} else unit
+        components.append(" ".join(value for value in (
+            quantity_label, unit_label, component["item"]
+        ) if value))
+    return display_heading, components
 
 
 def week_bounds(as_of: date, offset: int) -> tuple[date, date]:
@@ -47,6 +150,13 @@ def formatted_product_lines(product: str, width: int = 23) -> list[tuple[str, bo
     output: list[tuple[str, bool]] = []
     for entry in (entry.strip() for entry in product.split(";") if entry.strip()):
         heading, separator, details = entry.partition(":")
+        expanded = _expanded_platter(heading.strip(), details.strip())
+        if expanded:
+            display_heading, component_lines = expanded
+            output.extend((line, True) for line in textwrap.wrap(display_heading, width))
+            for component in component_lines:
+                output.extend((line, False) for line in textwrap.wrap(component, width))
+            continue
         output.extend((line, True) for line in (textwrap.wrap(heading.strip(), width) or [heading.strip()]))
         if separator:
             for detail in (part.strip() for part in details.split(",") if part.strip()):

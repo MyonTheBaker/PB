@@ -33,6 +33,43 @@ class OrderControlTests(unittest.TestCase):
             ("12 Mini Muesli", True),
         ])
 
+    def test_dictionary_expands_fixed_platter_components(self):
+        lines = formatted_product_lines("1 German Sausage Platter (D) (15 pax)", width=60)
+        self.assertEqual(lines[0], ("1 German Sausage Platter (D) (15 pax)", True))
+        self.assertIn(("5 Smoked Bratwurst", False), lines)
+        self.assertIn(("100g Ketchup", False), lines)
+        self.assertIn(("100g Spicy Mustard", False), lines)
+
+    def test_sandwich_platter_drops_pax_and_displays_piece_counts(self):
+        lines = formatted_product_lines(
+            "1 Mini Sandwiches Platter (C) (20 pax): Brie and Caramelised Pecans, Sausage Kraut",
+            width=60,
+        )
+        self.assertEqual(lines, [
+            ("1 Mini Sandwiches Platter (C)", True),
+            ("Brie 12", False),
+            ("Sausage Kraut 12", False),
+        ])
+
+    def test_croissant_platter_displays_filling_piece_count(self):
+        lines = formatted_product_lines(
+            "1 Mini Pretzel-Croissant Canape Platter (16 pcs): Egg Salad", width=60
+        )
+        self.assertEqual(lines, [
+            ("1 Mini Pretzel-Croissant Canape Platter", True),
+            ("Egg Salad 16", False),
+        ])
+
+    def test_sandwich_platter_preserves_explicit_uneven_piece_counts(self):
+        lines = formatted_product_lines(
+            "1 Mini Sandwiches Platter (C): 8 Brie, Sausage Kraut 16", width=60
+        )
+        self.assertEqual(lines, [
+            ("1 Mini Sandwiches Platter (C)", True),
+            ("Brie 8", False),
+            ("Sausage Kraut 16", False),
+        ])
+
     def test_operation_time_sorts_and_removes_label(self):
         minutes, label, notes = operation_time("Delivery 7:45 AM; loading bay")
         self.assertEqual((minutes, label, notes), (465, "7:45 AM", "loading bay"))

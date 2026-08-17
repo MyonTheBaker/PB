@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "source_workbook": {
+    "name": "CaterspotMenu_Aug2025.xlsx",
+    "sheet": "MAIN MENU",
+    "reviewed_at": "2026-08-17",
+    "note": "Initial definitions come from the workbook. WhatsApp evidence is used only for validation and conflict detection."
+  },
+  "platters": {
+    "classic_bakes_platter_a": {
+      "canonical_name": "Classic Bakes Platter (A) (20 pax)",
+      "aliases": ["Classic Bakes Platter", "Classic Bakes Platter (A)", "Classic Bakes Platter (20 pax)"],
+      "source_rows": [2, 4, 5, 6, 7, 8, 9, 10],
+      "components": [
+        {"quantity": 10, "unit": "pcs", "item": "Mini Pretzel"},
+        {"quantity": 10, "unit": "pcs", "item": "Mini Cheese Pretzel"},
+        {"quantity": 6, "unit": "pcs", "item": "Schoko Rolls"},
+        {"quantity": 6, "unit": "pcs", "item": "Karamel Igels"},
+        {"quantity": 6, "unit": "pcs", "item": "Brotchen"},
+        {"quantity": 10, "unit": "portions", "item": "Cream Cheese and Chives Dip", "aliases": ["Frischkaese"]}
+      ],
+      "validation_status": "validated",
+      "validation_note": "Repeated WhatsApp planning summaries match all six component quantities."
+    },
+    "classic_bagels_platter_b": {
+      "canonical_name": "Classic Bagels Platter (B) (20 pax)",
+      "aliases": ["Classic Bagels Platter", "Classic Bagels Platter (B)"],
+      "source_rows": [11, 13, 14, 15, 16, 17],
+      "components": [
+        {"quantity": 5, "unit": "pcs", "item": "Caprese Pesto Bagel"},
+        {"quantity": 5, "unit": "pcs", "item": "Jalapeno Cheddar Bagel"},
+        {"quantity": 5, "unit": "pcs", "item": "Hazelnut Chocolate Bagel"},
+        {"quantity": 5, "unit": "pcs", "item": "Speculoos Apple Bagel"}
+      ],
+      "validation_status": "partially_validated",
+      "validation_note": "Archived CaterSpot evidence confirms the platter and cut-into-four option, but does not enumerate its four components."
+    },
+    "mini_sandwiches_platter_c": {
+      "canonical_name": "Mini Sandwiches Platter (C) (20 pax)",
+      "aliases": ["Mini Sandwich Plater (C) (20 pax)", "Mini Sandwiches Platter (C)", "Mini Sandwiches Platter (20 pax)", "Mini Sandwich Platter (Choose 2)"],
+      "source_rows": [19, 20, 21, 22, 23, 24, 25, 26, 27],
+      "components": [
+        {"quantity": 24, "unit": "pcs", "item": "Mini Sandwiches", "allocation": "Divide across the selected fillings"}
+      ],
+      "choices": {
+        "maximum": 4,
+        "fillings": ["Roast Wagyu Beef", "Sausage Kraut", "Portobello Mushroom Pesto", "Ham and Cheese", "Tuscan Chicken", "Smoked Salmon", "Brie", "B.E.A.T"]
+      },
+      "validation_status": "validated_with_label_note",
+      "validation_note": "WhatsApp CaterSpot orders call this a 20-pax platter, while production summaries consistently resolve to 24 sandwiches per platter.",
+      "overview_display": {
+        "heading": "Mini Sandwiches Platter (C)",
+        "show_pax": false,
+        "show_component_quantity": false,
+        "show_selected_fillings_only": true,
+        "filling_line_format": "{filling} {pieces}",
+        "allocation_rule": "Each platter contains 24 sandwiches divided equally across its selected fillings unless the order evidence gives explicit filling quantities.",
+        "examples": ["Brie 12", "Sausage Kraut 12"]
+      }
+    },
+    "german_sausage_platter_d": {
+      "canonical_name": "German Sausage Platter (D) (15 pax)",
+      "aliases": ["German Sausage Platter (D)", "German Sausage Platter (15 pax)", "Sausage Platter (D)"],
+      "source_rows": [28, 31, 32, 33, 34, 35, 36],
+      "components": [
+        {"quantity": 5, "unit": "pcs", "item": "Smoked Bratwurst"},
+        {"quantity": 5, "unit": "pcs", "item": "Nurnberger"},
+        {"quantity": 5, "unit": "pcs", "item": "Thuringer Sausage"},
+        {"quantity": 1500, "unit": "g", "item": "Mashed Potatoes"},
+        {"quantity": 500, "unit": "g", "item": "Gravy"},
+        {"quantity": 100, "unit": "g", "item": "Ketchup"},
+        {"quantity": 100, "unit": "g", "item": "Spicy Mustard"}
+      ],
+      "validation_status": "validated_by_operator",
+      "validation_note": "Workbook specifies 200g each, but multiple production summaries specify 100g each. Operator confirmed 100g ketchup and 100g spicy mustard on 2026-08-17."
+    },
+    "assorted_mini_pretzel_platter_e": {
+      "canonical_name": "Assorted Mini Pretzel Platter (E)",
+      "aliases": ["Assorted Mini Pretzel Platter"],
+      "source_rows": [37, 38, 39, 40, 41, 42],
+      "components": [
+        {"quantity": 10, "unit": "pcs", "item": "Mini Pretzel"},
+        {"quantity": 10, "unit": "pcs", "item": "Mini Cheese Pretzel"},
+        {"quantity": 10, "unit": "pcs", "item": "Mini Garlic Pretzel"},
+        {"quantity": 10, "unit": "pcs", "item": "Mini Jalapeno Cheddar Pretzel"},
+        {"quantity": 10, "unit": "pcs", "item": "Mini Caprese Pesto Pretzel"},
+        {"quantity": 10, "unit": "pcs", "item": "Mini Flammkuchen Pretzel"}
+      ],
+      "validation_status": "validated",
+      "validation_note": "Archived invoice evidence lists the same six variants at 10 pieces each."
+    },
+    "pretzel_croissant_canape_platter": {
+      "canonical_name": "Mini Pretzel-Croissant Canape Platter (16 pcs)",
+      "aliases": ["Pretzel-Croissant Canape Platter", "Croissant Platter", "Mini Pretzel-Croissant Canape Platter"],
+      "source_rows": [43, 44, 45, 46],
+      "components": [
+        {"quantity": 16, "unit": "pcs", "item": "Pretzel-Croissant Canapes"}
+      ],
+      "choices": {
+        "maximum": 3,
+        "fillings": ["Smoked Salmon", "Ham and Cheese", "Brie", "Egg Salad"]
+      },
+      "validation_status": "validated_by_operator",
+      "validation_note": "Operator confirmed 16 pieces and instructed that original CaterSpot order evidence prevails over later summaries on 2026-08-17.",
+      "overview_display": {
+        "heading": "Mini Pretzel-Croissant Canape Platter",
+        "show_piece_count_in_heading": false,
+        "filling_line_format": "{filling} {pieces}",
+        "allocation_rule": "Each platter contains 16 pieces of its selected filling. Multiply 16 by the number of platters assigned to that filling.",
+        "examples": ["Egg Salad 16"]
+      },
+      "filling_evidence": [
+        {"order_id": "TXK7-AM3K", "fulfillment_date": "2026-08-18", "platters": [{"filling": "Smoked Salmon", "count": 1}], "evidence": "CaterSpot order image", "source_message_ids": ["3B620F1BC35FBAB9371A", "4AF919A0BC85820481CC"], "status": "clear"},
+        {"order_id": "ASYP-AQGK", "fulfillment_date": "2026-08-19", "platters": [{"filling": "Egg Salad", "count": 1}], "evidence": "CaterSpot delivery order and archived overview", "source_message_ids": ["external-32e99db7bd118feceb5f1740", "3EB0A6CDDCB0CAE69CFEDF"], "status": "clear"},
+        {"order_id": "82WY-WUNS", "fulfillment_date": "2026-08-10", "platters": [{"filling": "Egg Salad", "count": 1}, {"filling": "Ham and Cheese", "count": 1}, {"filling": "Smoked Salmon", "count": 1}], "evidence": "Production summary image", "source_message_ids": ["3A9E87F713A923836464", "4A8EA5635F30FBA96E99"], "status": "clear"},
+        {"order_id": "RRJG-CD5D", "fulfillment_date": "2026-06-02", "platters": [{"filling": "Egg Salad", "count": 1}, {"filling": "Ham and Cheese", "count": 1}, {"filling": "Smoked Salmon", "count": 1}], "evidence": "Production summary image", "source_message_ids": ["4ACB9FD309E0E770BF22"], "status": "clear"},
+        {"order_id": "XFU9-BXTH", "fulfillment_date": null, "platters": [{"filling": "Egg Salad", "count": 1}, {"filling": "Ham and Cheese", "count": 1}, {"filling": "Smoked Salmon", "count": 1}], "evidence": "CaterSpot order-summary collage", "source_message_ids": ["3B8588B6DE6229E01DFB"], "status": "clear"},
+        {"order_id": "F7CV-F7BX", "fulfillment_date": "2026-08-25", "platters": [{"filling": "Egg Salad", "count": 1}, {"filling": "Ham and Cheese", "count": 1}, {"filling": "Smoked Salmon", "count": 1}], "evidence": "Production summary image", "source_message_ids": ["4A8EA5635F30FBA96E99"], "status": "clear"},
+        {"order_id": "2ENP-WYJR", "fulfillment_date": "2026-06-23", "platters": [{"filling": "Ham and Cheese", "count": 1}], "evidence": "CaterSpot order image", "source_message_ids": ["4AE3B7DA73D4595C1256"], "status": "clear"},
+        {"order_id": "PZNS-J6PZ", "fulfillment_date": "2026-06-03", "platters": [{"filling": "Egg Salad", "count": 1}, {"filling": "Smoked Salmon", "count": 1}], "discarded_summary_evidence": [{"filling": "Egg Salad", "count": 1}, {"filling": "Ham and Cheese", "count": 1}, {"filling": "Smoked Salmon", "count": 1}], "evidence": "Original detailed CaterSpot screenshots show two platters; later production summary shows three. Operator policy selects the original order.", "source_message_ids": ["3B8588B6DE6229E01DFB", "4A3484E088EF24A238F3", "4ACB9FD309E0E770BF22"], "status": "resolved_original_order_authoritative"}
+      ]
+    },
+    "munich_white_sausage_breakfast_set": {
+      "canonical_name": "Munich White Sausage Breakfast Set (20 pax)",
+      "source_rows": [51, 53, 54, 55],
+      "components": [
+        {"quantity": 20, "unit": "pcs", "item": "Munich White Sausage"},
+        {"quantity": 20, "unit": "pcs", "item": "Pretzels"},
+        {"quantity": 200, "unit": "g", "item": "Sweet Mustard"}
+      ],
+      "validation_status": "workbook_only"
+    },
+    "german_breakfast_set": {
+      "canonical_name": "German Breakfast Set (20 pax)",
+      "source_rows": [61, 62, 63, 64, 65, 66, 67, 68, 69],
+      "components": [
+        {"quantity": 20, "unit": "pcs", "item": "Mini Pretzels"},
+        {"quantity": 18, "unit": "portions", "item": "Mini Granola Yogurt or Bircher Muesli"},
+        {"quantity": 24, "unit": "pcs", "item": "Brotchen"},
+        {"quantity": 20, "unit": "packs", "item": "Butter"},
+        {"quantity": 20, "unit": "packs", "item": "Mini Jams", "detail": "Assorted Strawberry, Orange Marmalade, Honey"}
+      ],
+      "choices": {"yogurt_or_muesli": ["All Yogurt", "All Bircher Muesli", "Equal Mix (9 each)"]},
+      "validation_status": "validated",
+      "validation_note": "Recent CaterSpot order confirms Equal Mix (9 each); historical production summaries match the other fixed components."
+    },
+    "mini_breakfast_buffet": {
+      "canonical_name": "Mini Breakfast Buffet (20 pax)",
+      "source_rows": [72, 73, 74, 75, 76, 77, 78, 79, 80, 82, 83],
+      "components": [
+        {"quantity": 1, "unit": "platter", "item": "Classic Bakes Platter (A) (20 pax)"},
+        {"quantity": 18, "unit": "portions", "item": "Mini Granola Yogurt or Bircher Muesli"}
+      ],
+      "choices": {"yogurt_or_muesli": ["All Yogurt", "All Bircher Muesli", "Equal Mix (9 each)"]},
+      "validation_status": "workbook_only"
+    },
+    "oktoberfest_platter": {
+      "canonical_name": "Oktoberfest Platter (4-6 pax)",
+      "source_sheet": "OKTOBERFEST",
+      "source_rows": [6],
+      "components_text": "Whole Pork Knuckle; 2 Bratwurst; 2 Nurnberger; Thuringer Snail; Chicken Schnitzel; Gravy; Spicy Mustard; Sweet Mustard; Mashed Potato",
+      "validation_status": "workbook_only"
+    },
+    "jausen_brett": {
+      "canonical_name": "Jausen brett (8-12 pax)",
+      "source_sheet": "OKTOBERFEST",
+      "source_rows": [8],
+      "components_text": "150g Black Forest Cured Ham; 300g Ham; 200g liver pate; 200g Emmental; butter; pickle; 12 slices vollkorn bread; cucumber; cherry tomato; onions",
+      "validation_status": "workbook_only"
+    },
+    "oktoberfest_pretzel_platter": {
+      "canonical_name": "Pretzel Platter (8-12 pax)",
+      "source_sheet": "OKTOBERFEST",
+      "source_rows": [10],
+      "components_text": "12 pretzels; Obatzda; liver pate; Frischkaese",
+      "validation_status": "workbook_only"
+    },
+    "oktoberfest_party_pack": {
+      "canonical_name": "Oktoberfest Party Pack (20 pax)",
+      "source_sheet": "OKTOBERFEST",
+      "source_rows": [13],
+      "components_text": "4 pork knuckles; 2 Haendl chickens; 10 Bratwurst; 12 Nurnberger; 4 Thuringer; 4 Schnitzel; 20 pretzels; 1kg potato salad; 1kg sauerkraut; 2kg mashed potato and gravy",
+      "validation_status": "workbook_only"
+    }
+  },
+  "unresolved_conflicts": []
+}
