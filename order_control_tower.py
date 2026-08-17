@@ -171,24 +171,8 @@ class OverviewLabel(QLabel):
             self.setPixmap(QPixmap())
             self.setText("No preorder overview has been generated for this week.")
         else:
-            self._source = self._crop_blank_bottom(self._source)
             self.setText("")
             self._fit()
-
-    @staticmethod
-    def _crop_blank_bottom(source: QPixmap) -> QPixmap:
-        image = source.toImage()
-        bottom = 0
-        for y in range(image.height() - 1, -1, -4):
-            if any(
-                min(image.pixelColor(x, y).red(), image.pixelColor(x, y).green(),
-                    image.pixelColor(x, y).blue()) < 245
-                for x in range(0, image.width(), 4)
-            ):
-                bottom = y
-                break
-        crop_height = min(image.height(), max(500, bottom + 55))
-        return source.copy(0, 0, source.width(), crop_height)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
