@@ -10,7 +10,7 @@ from email_order_processor import extract_order
 from order_email_ingest import credential_from_environment
 from order_control_tower import record_post_preparation, write_navigation_request
 from order_report_renderer import formatted_product_lines, operation_time, render_png, week_bounds
-from order_source_refresh import refresh
+from order_source_refresh import refresh, run_whatsapp_automation
 
 
 class OrderControlTests(unittest.TestCase):
@@ -89,6 +89,15 @@ class OrderControlTests(unittest.TestCase):
             self.assertEqual(result["results"][0]["status"], "capture_required")
             self.assertIn("press Refresh", result["results"][0]["message"])
             self.assertNotIn("Capture WhatsApp", result["results"][0]["message"])
+
+    def test_whatsapp_automation_waits_for_completed_extension_job(self):
+        responses = [
+            {"job_id": "job-1"},
+            {"job": {"id": "job-1", "status": "completed", "result": {"capture": {"ok": True}}}},
+        ]
+        with patch("order_source_refresh.receiver_json", side_effect=responses):
+            result = run_whatsapp_automation(timeout_seconds=1)
+        self.assertEqual(result["status"], "completed")
 
 
 if __name__ == "__main__":

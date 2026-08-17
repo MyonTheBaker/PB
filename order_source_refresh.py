@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from order_email_ingest import sync as sync_email
@@ -14,7 +17,32 @@ from whatsapp_order_exporter.import_browser_capture import import_capture
 VALID_SOURCES = {"whatsapp", "email", "web"}
 
 
-def refresh(root: Path, sources: list[str]) -> dict:
+def receiver_json(path: str, payload: dict | None = None) -> dict:
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(
+        f"http://127.0.0.1:8765{path}", data=body,
+        headers={"Content-Type": "application/json"} if body else {},
+        method="POST" if body else "GET",
+    )
+    with urllib.request.urlopen(request, timeout=5) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def run_whatsapp_automation(timeout_seconds: int = 240) -> dict:
+    started = receiver_json("/automation/start", {})
+    job_id = started["job_id"]
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        job = receiver_json(f"/automation/status?id={job_id}").get("job") or {}
+        if job.get("status") == "completed":
+            return job
+        if job.get("status") == "failed":
+            raise RuntimeError(job.get("error") or "WhatsApp automation failed")
+        time.sleep(1)
+    raise TimeoutError("WhatsApp extension did not complete the capture within four minutes")
+
+
+def refresh(root: Path, sources: list[str], automate_whatsapp: bool = False) -> dict:
     results = []
     for source in sources:
         if source == "email":
@@ -31,6 +59,8 @@ def refresh(root: Path, sources: list[str]) -> dict:
                 results.append({"source": source, "status": "error", "message": f"Email: {exc}"})
         elif source == "whatsapp":
             try:
+                if automate_whatsapp:
+                    run_whatsapp_automation()
                 imported = import_capture(root / "browser", root, None, None)
                 results.append({
                     "source": source, "status": "ok",
@@ -60,12 +90,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Refresh selected order evidence sources")
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--sources", required=True)
+    parser.add_argument("--automate-whatsapp", action="store_true")
     args = parser.parse_args()
     sources = [value.strip().casefold() for value in args.sources.split(",") if value.strip()]
     unknown = sorted(set(sources) - VALID_SOURCES)
     if unknown:
         raise SystemExit(f"Unknown sources: {', '.join(unknown)}")
-    print(json.dumps(refresh(args.root, sources), ensure_ascii=False))
+    print(json.dumps(refresh(args.root, sources, args.automate_whatsapp), ensure_ascii=False))
 
 
 if __name__ == "__main__":

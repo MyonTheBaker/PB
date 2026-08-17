@@ -10,6 +10,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 EXPECTED_CHAT = "PB Advance Orders"
 MAX_BODY_BYTES = 25 * 1024 * 1024
@@ -254,29 +255,62 @@ class CaptureHandler(BaseHTTPRequestHandler):
         self._headers(204)
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path != "/health":
-            self._json(404, {"ok": False, "error": "Not found."})
+        parsed = urlparse(self.path)
+        if parsed.path == "/health":
+            self._json(200, {"ok": True, "service": "PB Advance Orders local receiver"})
             return
-        self._json(200, {"ok": True, "service": "PB Advance Orders local receiver"})
+        if parsed.path == "/automation/next":
+            job = next((item for item in self.server.automation_jobs.values()  # type: ignore[attr-defined]
+                        if item["status"] == "pending"), None)
+            if job:
+                job["status"] = "running"
+                job["started_at"] = utc_now()
+            self._json(200, {"ok": True, "job": job})
+            return
+        if parsed.path == "/automation/status":
+            job_id = parse_qs(parsed.query).get("id", [""])[0]
+            job = self.server.automation_jobs.get(job_id)  # type: ignore[attr-defined]
+            self._json(200 if job else 404, {"ok": bool(job), "job": job})
+            return
+        else:
+            self._json(404, {"ok": False, "error": "Not found."})
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path not in {"/capture", "/media", "/media-manifest"}:
+        parsed = urlparse(self.path)
+        if parsed.path not in {"/capture", "/media", "/media-manifest", "/automation/start", "/automation/result"}:
             self._json(404, {"ok": False, "error": "Not found."})
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            limit = MAX_MEDIA_BYTES if self.path == "/media" else MAX_BODY_BYTES
+            limit = MAX_MEDIA_BYTES if parsed.path == "/media" else MAX_BODY_BYTES
             if length <= 0 or length > limit:
                 raise ValueError("Invalid capture size.")
             raw = self.rfile.read(length)
-            if self.path == "/media":
+            if parsed.path == "/media":
                 result = store_media(self.server.data_root, self.headers, raw)  # type: ignore[attr-defined]
             else:
                 payload = json.loads(raw.decode("utf-8"))
-                if self.path == "/capture":
+                if parsed.path == "/capture":
                     result = store_capture(self.server.data_root, payload, raw)  # type: ignore[attr-defined]
-                else:
+                elif parsed.path == "/media-manifest":
                     result = store_media_manifest(self.server.data_root, payload, raw)  # type: ignore[attr-defined]
+                elif parsed.path == "/automation/start":
+                    job_id = f"automation_{uuid.uuid4().hex}"
+                    result = {"ok": True, "job_id": job_id, "status": "pending"}
+                    self.server.automation_jobs[job_id] = {  # type: ignore[attr-defined]
+                        "id": job_id, "status": "pending", "created_at": utc_now(),
+                        "expected_chat": EXPECTED_CHAT, "result": None, "error": None,
+                    }
+                else:
+                    job_id = str(payload.get("job_id", ""))
+                    job = self.server.automation_jobs.get(job_id)  # type: ignore[attr-defined]
+                    if not job:
+                        raise ValueError("Unknown automation job.")
+                    job["status"] = "completed" if payload.get("ok") else "failed"
+                    job["completed_at"] = utc_now()
+                    job["result"] = payload.get("result")
+                    job["error"] = payload.get("error")
+                    result = {"ok": True, "job_id": job_id, "status": job["status"]}
             self._json(201, result)
         except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
             self._json(400, {"ok": False, "error": str(error)})
@@ -284,7 +318,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
             self._json(500, {"ok": False, "error": f"Receiver error: {error}"})
 
     def log_message(self, format: str, *args: Any) -> None:
-        sys.stdout.write(f"{self.address_string()} - {format % args}\n")
+        if sys.stdout is not None:
+            sys.stdout.write(f"{self.address_string()} - {format % args}\n")
 
 
 def main() -> int:
@@ -304,6 +339,7 @@ def main() -> int:
         return 0
     server = ThreadingHTTPServer((args.host, args.port), CaptureHandler)
     server.data_root = args.data_root.resolve()  # type: ignore[attr-defined]
+    server.automation_jobs = {}  # type: ignore[attr-defined]
     print(f"Listening on http://{args.host}:{args.port}; data root: {server.data_root}")
     try:
         server.serve_forever()

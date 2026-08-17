@@ -206,10 +206,24 @@
   }
 
   chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-    if (!["CAPTURE_VISIBLE_MESSAGES", "CAPTURE_LOADED_HISTORY", "CAPTURE_LOADED_MEDIA"].includes(request?.type)) return false;
+    if (!["OPEN_TARGET_CHAT", "CAPTURE_VISIBLE_MESSAGES", "CAPTURE_LOADED_HISTORY", "CAPTURE_LOADED_MEDIA"].includes(request?.type)) return false;
     (async () => {
       try {
-        const title = currentChatTitle();
+        let title = currentChatTitle();
+        if (request.type === "OPEN_TARGET_CHAT") {
+          if (title !== request.expectedChat) {
+            const target = [...document.querySelectorAll("span[title]")]
+              .find((node) => node.getAttribute("title") === request.expectedChat);
+            const row = target?.closest('[role="row"]');
+            if (!row) throw new Error(`Chat “${request.expectedChat}” is not visible in the chat list.`);
+            row.click();
+            await pause(1200);
+            title = currentChatTitle();
+          }
+          if (title !== request.expectedChat) throw new Error(`Could not open “${request.expectedChat}”.`);
+          sendResponse({ ok: true, chat_title: title });
+          return;
+        }
         if (title !== request.expectedChat) {
           throw new Error(`Refusing capture: open chat is “${title || "unknown"}”, not “${request.expectedChat}”.`);
         }

@@ -314,12 +314,7 @@ class OrderControlTower(QMainWindow):
         QDesktopServices.openUrl(WHATSAPP_WEB)
         self.status.setText("WhatsApp capture is ready. Open PB Advance Orders, then use the extension for full media and loaded history.")
         if show_instructions:
-            QMessageBox.information(
-                self, "WhatsApp refresh started",
-                "WhatsApp Web has been opened and the local receiver is running.\n\n"
-                "1. Open PB Advance Orders.\n2. Run Capture full media in the extension.\n"
-                "3. Run Capture loaded history.\n4. Return here and press Refresh again to ingest it.",
-            )
+            self.status.setText("WhatsApp automation started: opening the order chat, capturing media and history, then ingesting the result…")
 
     def prepare_whatsapp_post(self) -> None:
         report = self.report_for_week()
@@ -395,6 +390,7 @@ class OrderControlTower(QMainWindow):
         self.process.setArguments([
             str(PROJECT / "order_source_refresh.py"), "--root", str(DATA_ROOT),
             "--sources", ",".join(sources),
+            *(["--automate-whatsapp"] if operator_initiated and "whatsapp" in sources else []),
         ])
         self.process.finished.connect(self.refresh_finished)
         self.process.errorOccurred.connect(self.refresh_error)
