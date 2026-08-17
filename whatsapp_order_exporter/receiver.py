@@ -15,6 +15,8 @@ from urllib.parse import parse_qs, urlparse
 EXPECTED_CHAT = "PB Advance Orders"
 MAX_BODY_BYTES = 25 * 1024 * 1024
 MAX_MEDIA_BYTES = 150 * 1024 * 1024
+EDIT_WINDOW_MINUTES = 15
+CAPTURE_MARGIN_MINUTES = 10
 
 
 def utc_now() -> str:
@@ -23,7 +25,8 @@ def utc_now() -> str:
 
 def initialise_database(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(path) as db:
+    db = sqlite3.connect(path)
+    try:
         db.executescript(
             """
             PRAGMA journal_mode=WAL;
@@ -81,6 +84,25 @@ def initialise_database(path: Path) -> None:
             );
             """
         )
+    finally:
+        db.close()
+
+
+def incremental_cutoff(data_root: Path) -> str | None:
+    database_path = data_root / "browser-captures.sqlite3"
+    initialise_database(database_path)
+    db = sqlite3.connect(database_path)
+    try:
+        row = db.execute(
+            "SELECT received_at FROM capture_runs ORDER BY received_at DESC LIMIT 1"
+        ).fetchone()
+    finally:
+        db.close()
+    if not row:
+        return None
+    previous = dt.datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
+    overlap = dt.timedelta(minutes=EDIT_WINDOW_MINUTES + CAPTURE_MARGIN_MINUTES)
+    return (previous - overlap).astimezone(dt.timezone.utc).isoformat(timespec="seconds")
 
 
 def safe_header(value: str, limit: int = 500) -> str:
@@ -296,10 +318,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     result = store_media_manifest(self.server.data_root, payload, raw)  # type: ignore[attr-defined]
                 elif parsed.path == "/automation/start":
                     job_id = f"automation_{uuid.uuid4().hex}"
+                    cutoff_at = incremental_cutoff(self.server.data_root)  # type: ignore[attr-defined]
                     result = {"ok": True, "job_id": job_id, "status": "pending"}
                     self.server.automation_jobs[job_id] = {  # type: ignore[attr-defined]
                         "id": job_id, "status": "pending", "created_at": utc_now(),
-                        "expected_chat": EXPECTED_CHAT, "result": None, "error": None,
+                        "expected_chat": EXPECTED_CHAT, "mode": "incremental",
+                        "cutoff_at": cutoff_at,
+                        "overlap_minutes": EDIT_WINDOW_MINUTES + CAPTURE_MARGIN_MINUTES,
+                        "result": None, "error": None,
                     }
                 else:
                     job_id = str(payload.get("job_id", ""))

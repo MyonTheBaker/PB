@@ -11,9 +11,9 @@ async function receiverPost(path, body) {
   return result;
 }
 
-async function capture(tabId, type, expectedChat) {
+async function capture(tabId, type, expectedChat, cutoffAt = null) {
   const response = await chrome.tabs.sendMessage(tabId, {
-    type, expectedChat, maxSteps: 80
+    type, expectedChat, maxSteps: 80, cutoffAt
   });
   if (!response?.ok) throw new Error(response?.error || `${type} failed.`);
   return response;
@@ -34,10 +34,9 @@ async function runNextJob() {
     const tabId = targetTab.id;
     await chrome.tabs.update(tabId, { active: true });
     await capture(tabId, "OPEN_TARGET_CHAT", job.expected_chat);
-    const media = await capture(tabId, "CAPTURE_LOADED_MEDIA", job.expected_chat);
-    const mediaResult = await receiverPost("/media-manifest", media.media_manifest);
-    const history = await capture(tabId, "CAPTURE_LOADED_HISTORY", job.expected_chat);
-    const captureResult = await receiverPost("/capture", history.payload);
+    const incremental = await capture(tabId, "CAPTURE_INCREMENTAL", job.expected_chat, job.cutoff_at);
+    const mediaResult = await receiverPost("/media-manifest", incremental.media_manifest);
+    const captureResult = await receiverPost("/capture", incremental.payload);
     await receiverPost("/automation/result", {
       job_id: job.id, ok: true,
       result: { media: mediaResult, capture: captureResult }

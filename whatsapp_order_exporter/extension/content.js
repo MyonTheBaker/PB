@@ -193,6 +193,62 @@
       remainingReadMore: messages.filter((message) => /Read more/i.test(message.raw_text)).length };
   }
 
+  function messageTimestamp(message) {
+    const match = (message.pre_plain_text || "").match(/^\[(.+?),\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\]/);
+    if (!match) return null;
+    const time = match[1].trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)$/i);
+    if (!time) return null;
+    let hour = Number(time[1]) % 12;
+    if (time[3].toUpperCase() === "PM") hour += 12;
+    return new Date(Number(match[4]), Number(match[2]) - 1, Number(match[3]), hour, Number(time[2])).getTime();
+  }
+
+  async function captureIncremental(cutoffIso, maxSteps) {
+    const scrollContainer = findScrollContainer();
+    if (!scrollContainer) throw new Error("Could not identify the message-history scroller.");
+    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    scrollContainer.dispatchEvent(new Event("scroll", { bubbles: true }));
+    await pause(800);
+    const cutoff = cutoffIso ? Date.parse(cutoffIso) : null;
+    const allMessages = new Map();
+    const mediaResults = new Map();
+    let steps = 0;
+    let expandedReadMore = 0;
+    let reachedCutoff = false;
+    for (; steps < Math.min(Math.max(maxSteps || 40, 1), 120); steps += 1) {
+      expandedReadMore += await expandVisibleReadMore();
+      const visible = captureMessages();
+      const panel = document.querySelector('[data-testid="conversation-panel-messages"]') || document.querySelector("#main");
+      const rows = [...panel.querySelectorAll('[role="row"]')];
+      for (const message of visible) allMessages.set(message.message_id, message);
+      for (const row of rows) {
+        const idNode = row.matches("[data-id]") ? row : row.querySelector("[data-id]");
+        const messageId = clean(idNode?.getAttribute("data-id"));
+        const message = visible.find((item) => item.message_id === messageId);
+        const stamp = message ? messageTimestamp(message) : null;
+        if (!messageId || (cutoff !== null && stamp !== null && stamp < cutoff)) continue;
+        for (const candidate of mediaCandidates(row, messageId)) {
+          const key = `${candidate.message_id}:${candidate.media_index}:${candidate.source}`;
+          if (!mediaResults.has(key)) mediaResults.set(key, await uploadCandidate(candidate));
+        }
+      }
+      const stamps = visible.map(messageTimestamp).filter((value) => value !== null);
+      reachedCutoff = cutoff !== null && stamps.length > 0 && Math.min(...stamps) <= cutoff;
+      if (reachedCutoff) break;
+      const before = scrollContainer.scrollTop;
+      scrollContainer.scrollTop = Math.max(0, before - Math.max(300, Math.floor(scrollContainer.clientHeight * 0.8)));
+      scrollContainer.dispatchEvent(new Event("scroll", { bubbles: true }));
+      await pause(700);
+      if (scrollContainer.scrollTop === 0) break;
+    }
+    const messages = [...allMessages.values()];
+    messages.forEach((message, ordinal) => { message.ordinal = ordinal; });
+    return { messages, mediaResults: [...mediaResults.values()], steps: steps + 1,
+      reachedCutoff, reachedLoadedTop: scrollContainer.scrollTop === 0,
+      expandedReadMore,
+      remainingReadMore: messages.filter((message) => /Read more/i.test(message.raw_text)).length };
+  }
+
   function payloadFor(title, messages, scan = null) {
     return {
       schema_version: 2,
@@ -206,7 +262,7 @@
   }
 
   chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-    if (!["OPEN_TARGET_CHAT", "CAPTURE_VISIBLE_MESSAGES", "CAPTURE_LOADED_HISTORY", "CAPTURE_LOADED_MEDIA"].includes(request?.type)) return false;
+    if (!["OPEN_TARGET_CHAT", "CAPTURE_INCREMENTAL", "CAPTURE_VISIBLE_MESSAGES", "CAPTURE_LOADED_HISTORY", "CAPTURE_LOADED_MEDIA"].includes(request?.type)) return false;
     (async () => {
       try {
         let title = currentChatTitle();
@@ -229,7 +285,21 @@
         }
         let messages;
         let scan = null;
-        if (request.type === "CAPTURE_LOADED_MEDIA") {
+        if (request.type === "CAPTURE_INCREMENTAL") {
+          const incremental = await captureIncremental(request.cutoffAt, request.maxSteps);
+          sendResponse({ ok: true,
+            media_manifest: { schema_version: 1, captured_at: new Date().toISOString(), chat_title: title,
+              scanned_messages: incremental.messages.length, scan: { steps: incremental.steps,
+                reached_cutoff: incremental.reachedCutoff, reached_loaded_top: incremental.reachedLoadedTop,
+                expanded_read_more: incremental.expandedReadMore }, results: incremental.mediaResults },
+            payload: payloadFor(title, incremental.messages, { steps: incremental.steps,
+              cutoff_at: request.cutoffAt || null, reached_cutoff: incremental.reachedCutoff,
+              reached_loaded_top: incremental.reachedLoadedTop,
+              expanded_read_more: incremental.expandedReadMore,
+              remaining_read_more: incremental.remainingReadMore })
+          });
+          return;
+        } else if (request.type === "CAPTURE_LOADED_MEDIA") {
           const media = await captureLoadedMedia(request.maxSteps);
           sendResponse({ ok: true, media_manifest: {
             schema_version: 1, captured_at: new Date().toISOString(), chat_title: title,

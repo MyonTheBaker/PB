@@ -9,7 +9,7 @@ Current integration status:
 | Source | Status | Refresh behaviour |
 |---|---|---|
 | Email | Operational | Read-only Gmail IMAP sync, archive, deduplication, extraction, reconciliation, and report regeneration |
-| WhatsApp | Automated, read-only | Refresh queues the extension to open the approved chat, capture media and loaded history, archive it, and ingest the completed capture |
+| WhatsApp | Automated, read-only | Refresh queues an incremental capture from the last successful timestamp with a 25-minute overlap, archives new/edited messages and relevant media, then ingests it |
 | CaterSpot / Oddle | Planned | UI option is present, but no authenticated first-party adapter is connected |
 
 The repository contains application code and sanitized configuration only. Mail, message history, attachments, databases, credentials, and generated report images are intentionally excluded from Git.
@@ -20,7 +20,7 @@ The repository contains application code and sanitized configuration only. Mail,
 2. The initial view opens the week containing the next business day and starts a refresh automatically.
 3. Use the source selector to choose Email, WhatsApp, Web Crawler, or all sources.
 4. Tick WhatsApp, Email, and/or Web Crawler in the source selector.
-5. Select **Refresh** to run every selected source. When WhatsApp is selected, Refresh starts the receiver, opens the approved order chat, captures full media and loaded history, waits for completion, and ingests the result in one workflow.
+5. Select **Refresh** to run every selected source. When WhatsApp is selected, Refresh starts the receiver, opens the approved order chat, scans back to the previous successful capture plus a 25-minute overlap, downloads media only in that window, and ingests the result in one workflow.
 6. Use the left and right arrows to inspect earlier or later preorder weeks.
 7. Select **Post week to WhatsApp** to approve the week currently displayed, copy that exact PNG to the clipboard, and open WhatsApp Web. Paste with `Ctrl+V`, verify the chat and preview, and press Send.
 8. Use **Back to Control Tower** to return directly to the Pre-Orders page.
@@ -110,6 +110,8 @@ Start the local receiver with:
 Load the unpacked extension from `whatsapp_order_exporter\extension` in Chrome's extension developer mode. Open the authorized WhatsApp Business order channel, run the supervised history/media capture, and import the resulting evidence. Capture and import tools retain timestamps, sender/body data, media hashes, source linkage, and capture manifests.
 
 WhatsApp capture is constrained to the exact configured order-chat title and remains read-only. The extension refuses a different chat, archives capture manifests and hashes, and reports unavailable media or unexpanded long-message markers for review. Sara's daily summary messages may be used for comparison, but canonical synthesis should be built from underlying order evidence rather than copying those summaries.
+
+Incremental capture uses WhatsApp's documented 15-minute message-editing window plus a 10-minute safety margin. The cutoff is derived from the receiver's persisted timestamp of the previous successful capture, so application or workstation restarts do not lose the watermark. The original popup full-history and full-media actions remain available for explicit recovery or audit passes only.
 
 ## Security and privacy
 

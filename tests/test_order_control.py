@@ -11,6 +11,7 @@ from order_email_ingest import credential_from_environment
 from order_control_tower import record_post_preparation, write_navigation_request
 from order_report_renderer import formatted_product_lines, operation_time, render_png, week_bounds
 from order_source_refresh import refresh, run_whatsapp_automation
+from whatsapp_order_exporter.receiver import incremental_cutoff, initialise_database
 
 
 class OrderControlTests(unittest.TestCase):
@@ -98,6 +99,21 @@ class OrderControlTests(unittest.TestCase):
         with patch("order_source_refresh.receiver_json", side_effect=responses):
             result = run_whatsapp_automation(timeout_seconds=1)
         self.assertEqual(result["status"], "completed")
+
+    def test_incremental_cutoff_persists_edit_window_and_margin(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database = root / "browser-captures.sqlite3"
+            initialise_database(database)
+            connection = sqlite3.connect(database)
+            connection.execute(
+                "INSERT INTO capture_runs VALUES(?,?,?,?,?,?,?,?)",
+                ("cap-1", "2026-08-17T01:00:00+00:00", "2026-08-17T01:01:00+00:00",
+                 "PB Advance Orders", "https://web.whatsapp.com/", 2, "capture.json", "hash"),
+            )
+            connection.commit()
+            connection.close()
+            self.assertEqual(incremental_cutoff(root), "2026-08-17T00:36:00+00:00")
 
 
 if __name__ == "__main__":
