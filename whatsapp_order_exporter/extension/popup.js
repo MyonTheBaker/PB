@@ -1,8 +1,5 @@
 const RECEIVER = "http://127.0.0.1:8765";
-const EXPECTED_CHAT = "PB Advance Orders";
 const button = document.getElementById("capture");
-const historyButton = document.getElementById("history");
-const mediaButton = document.getElementById("media");
 const statusNode = document.getElementById("status");
 
 function setStatus(message, kind = "") {
@@ -10,62 +7,56 @@ function setStatus(message, kind = "") {
   statusNode.className = kind;
 }
 
+async function receiverJson(path, body = null) {
+  const response = await fetch(`${RECEIVER}${path}`, {
+    method: body ? "POST" : "GET",
+    headers: body ? { "Content-Type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store"
+  });
+  const result = await response.json();
+  if (!response.ok || !result.ok) throw new Error(result.error || `Receiver HTTP ${response.status}`);
+  return result;
+}
+
 async function receiverHealth() {
   try {
-    const response = await fetch(`${RECEIVER}/health`, { cache: "no-store" });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    await receiverJson("/health");
     setStatus("Local receiver is ready.", "ok");
-  } catch (error) {
-    setStatus("Local receiver is not running. Start it, then try again.", "error");
+  } catch (_error) {
+    setStatus("Local receiver is not running. Start it from the Control Tower, then try again.", "error");
   }
 }
 
-async function runCapture(messageType) {
+async function waitForJob(jobId) {
+  for (let attempt = 0; attempt < 240; attempt += 1) {
+    const job = (await receiverJson(`/automation/status?id=${encodeURIComponent(jobId)}`)).job;
+    if (job.status === "completed") return job;
+    if (job.status === "failed") throw new Error(job.error || "Capture failed.");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error("Capture is still pending. It may continue in the background.");
+}
+
+async function runCapture() {
   button.disabled = true;
-  historyButton.disabled = true;
-  mediaButton.disabled = true;
-  setStatus(messageType === "CAPTURE_LOADED_HISTORY"
-    ? "Scrolling through loaded history… Keep this popup open."
-    : "Reading the open WhatsApp chat…");
+  setStatus("Queueing incremental capture…");
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id || !tab.url?.startsWith("https://web.whatsapp.com/")) {
-      throw new Error("Open WhatsApp Web and select the order group first.");
-    }
-    const capture = await chrome.tabs.sendMessage(tab.id, {
-      type: messageType,
-      expectedChat: EXPECTED_CHAT,
-      maxSteps: 80
-    });
-    if (!capture?.ok) throw new Error(capture?.error || "Capture failed.");
-    const isMedia = messageType === "CAPTURE_LOADED_MEDIA";
-    const body = isMedia ? capture.media_manifest : capture.payload;
-    const response = await fetch(`${RECEIVER}/${isMedia ? "media-manifest" : "capture"}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    const result = await response.json();
-    if (!response.ok || !result.ok) throw new Error(result.error || `Receiver HTTP ${response.status}`);
-    if (isMedia) {
-      setStatus(`Saved ${result.downloaded} media files; ${result.failed} unavailable.`, result.failed ? "warning" : "ok");
-    } else {
-      const suffix = capture.payload.scan ? ` across ${capture.payload.scan.steps} scroll positions` : "";
-      const expanded = capture.payload.scan?.expanded_read_more || 0;
-      const remaining = capture.payload.scan?.remaining_read_more || 0;
-      const expansion = capture.payload.scan ? ` Expanded ${expanded} long messages; ${remaining} markers remain.` : "";
-      setStatus(`Saved ${result.message_count} messages (${result.new_messages} new)${suffix}.${expansion}`, remaining ? "warning" : "ok");
-    }
+    const started = await receiverJson("/automation/start", {});
+    setStatus("Capturing updates in the background…");
+    const job = await waitForJob(started.job_id);
+    const capture = job.result?.capture || {};
+    const media = job.result?.media || {};
+    setStatus(
+      `Saved ${capture.message_count || 0} messages (${capture.new_messages || 0} new) and ${media.downloaded || 0} media files.`,
+      media.failed ? "warning" : "ok"
+    );
   } catch (error) {
     setStatus(error.message, "error");
   } finally {
     button.disabled = false;
-    historyButton.disabled = false;
-    mediaButton.disabled = false;
   }
 }
 
-button.addEventListener("click", () => runCapture("CAPTURE_VISIBLE_MESSAGES"));
-historyButton.addEventListener("click", () => runCapture("CAPTURE_LOADED_HISTORY"));
-mediaButton.addEventListener("click", () => runCapture("CAPTURE_LOADED_MEDIA"));
+button.addEventListener("click", runCapture);
 receiverHealth();

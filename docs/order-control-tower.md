@@ -111,7 +111,7 @@ Load the unpacked extension from `whatsapp_order_exporter\extension` in Chrome's
 
 WhatsApp capture is constrained to the exact configured order-chat title and remains read-only. The extension refuses a different chat, archives capture manifests and hashes, and reports unavailable media or unexpanded long-message markers for review. Sara's daily summary messages may be used for comparison, but canonical synthesis should be built from underlying order evidence rather than copying those summaries.
 
-Incremental capture uses WhatsApp's documented 15-minute message-editing window plus a 10-minute safety margin. The cutoff is derived from the receiver's persisted timestamp of the previous successful capture, so application or workstation restarts do not lose the watermark. The original popup full-history and full-media actions remain available for explicit recovery or audit passes only.
+Incremental capture uses WhatsApp's documented 15-minute message-editing window plus a 10-minute safety margin. The cutoff is derived from the receiver's persisted timestamp of the previous successful capture, so application or workstation restarts do not lose the watermark. The extension popup exposes the normal workflow through one **Capture updates** button; full recovery passes are maintenance operations rather than routine operator controls.
 
 ## Security and privacy
 
