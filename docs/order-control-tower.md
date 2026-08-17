@@ -20,7 +20,7 @@ The repository contains application code and sanitized configuration only. Mail,
 2. The initial view opens the week containing the next business day and starts a refresh automatically.
 3. Use the source selector to choose Email, WhatsApp, Web Crawler, or all sources.
 4. Tick WhatsApp, Email, and/or Web Crawler in the source selector.
-5. Select **Refresh** to run every selected source. When WhatsApp is selected, Refresh starts the receiver, opens the approved order chat, scans back to the previous successful capture plus a 25-minute overlap, downloads media only in that window, and ingests the result in one workflow.
+5. Select **Refresh** to run every selected source. When WhatsApp is selected, Refresh uses the already-running WhatsApp Web/PWA window, opens the approved order chat inside it, scans back to the previous successful capture plus a 25-minute overlap, downloads media only in that window, and ingests the result. It does not open a browser tab.
 6. Use the left and right arrows to inspect earlier or later preorder weeks.
 7. Select **Post week to WhatsApp** to approve the week currently displayed, copy that exact PNG to the clipboard, and open WhatsApp Web. Paste with `Ctrl+V`, verify the chat and preview, and press Send.
 8. Use **Back to Control Tower** to return directly to the Pre-Orders page.

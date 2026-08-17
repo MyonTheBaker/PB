@@ -12,8 +12,8 @@ import uuid
 from datetime import date, timedelta
 from pathlib import Path
 
-from PyQt5.QtCore import QProcess, QSize, Qt, QTimer, QUrl
-from PyQt5.QtGui import QDesktopServices, QPixmap
+from PyQt5.QtCore import QProcess, QSize, Qt, QTimer
+from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
     QAction, QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu,
     QMessageBox, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
@@ -27,7 +27,6 @@ NAVIGATION_REQUEST = PROJECT / "tmp" / "control_tower_navigation.json"
 CAPTURE_RECEIVER = PROJECT / "whatsapp_order_exporter" / "receiver.py"
 HR_CONTROL_TOWER = PROJECT / "hr_control_tower.py"
 PYTHONW = PROJECT / ".venv" / "Scripts" / "pythonw.exe"
-WHATSAPP_WEB = QUrl("https://web.whatsapp.com/")
 SOURCE_LABELS = {"whatsapp": "WhatsApp", "email": "Email", "web": "Web Crawler"}
 
 
@@ -120,6 +119,41 @@ def start_hr_control_tower() -> bool:
     executable = PYTHONW if PYTHONW.exists() else Path(sys.executable)
     outcome = QProcess.startDetached(str(executable), [str(HR_CONTROL_TOWER)], str(PROJECT))
     return bool(outcome[0] if isinstance(outcome, tuple) else outcome)
+
+
+def focus_whatsapp_window() -> bool:
+    """Bring an existing WhatsApp Web/PWA window forward without opening a new tab."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        matches: list[int] = []
+        callback_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+        def inspect(hwnd, _parameter):
+            if not user32.IsWindowVisible(hwnd):
+                return True
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length <= 0:
+                return True
+            buffer = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buffer, length + 1)
+            if "whatsapp" in buffer.value.casefold():
+                matches.append(int(hwnd))
+            return True
+
+        user32.EnumWindows(callback_type(inspect), 0)
+        if not matches:
+            return False
+        hwnd = matches[0]
+        user32.ShowWindow(hwnd, 9)
+        user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
+        user32.SetWindowPos(hwnd, -2, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
+        user32.SetForegroundWindow(hwnd)
+        return True
+    except (AttributeError, OSError, ValueError):
+        return False
 
 
 class OverviewLabel(QLabel):
@@ -311,8 +345,7 @@ class OrderControlTower(QMainWindow):
             if not started:
                 QMessageBox.critical(self, "Capture unavailable", "The local WhatsApp receiver could not be started.")
                 return
-        QDesktopServices.openUrl(WHATSAPP_WEB)
-        self.status.setText("WhatsApp capture is ready. Open PB Advance Orders, then use the extension for full media and loaded history.")
+        self.status.setText("WhatsApp capture is ready in the existing WhatsApp Web window.")
         if show_instructions:
             self.status.setText("WhatsApp automation started: opening the order chat, capturing media and history, then ingesting the result…")
 
@@ -339,12 +372,13 @@ class OrderControlTower(QMainWindow):
         config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
         outbox_id = record_post_preparation(DATA_ROOT, report, self.week_start, config.get("chat_title"))
         QApplication.clipboard().setPixmap(pixmap)
-        QDesktopServices.openUrl(WHATSAPP_WEB)
+        found = focus_whatsapp_window()
         self.status.setText(f"Selected week copied for WhatsApp (outbox {outbox_id[:8]}). Paste with Ctrl+V, verify, then send.")
         QMessageBox.information(
             self, "Selected week ready",
-            "The selected overview is on the clipboard. In WhatsApp Web, open the approved order channel, "
-            "press Ctrl+V, verify the preview and week, then press Send.",
+            "The selected overview is on the clipboard. "
+            + ("The existing WhatsApp Web window has been brought forward. " if found else "Open your WhatsApp Web desktop shortcut. ")
+            + "Open the approved order channel, press Ctrl+V, verify the preview and week, then press Send.",
         )
 
     def _arrow(self, text: str, tooltip: str) -> QToolButton:
