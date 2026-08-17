@@ -41,12 +41,12 @@ def refresh(root: Path, sources: list[str]) -> dict:
                 detail = str(exc)
                 status = "up_to_date" if "already imported" in detail else "capture_required"
                 message = ("WhatsApp: latest capture is already imported" if status == "up_to_date"
-                           else "WhatsApp: start Capture WhatsApp and complete the extension capture")
+                           else "WhatsApp: select WhatsApp, press Refresh, and complete the extension capture")
                 results.append({"source": source, "status": status, "message": message})
             except Exception:
                 results.append({
                     "source": source, "status": "capture_required",
-                    "message": "WhatsApp: start Capture WhatsApp and complete the extension capture",
+                    "message": "WhatsApp: select WhatsApp, press Refresh, and complete the extension capture",
                 })
         elif source == "web":
             results.append({

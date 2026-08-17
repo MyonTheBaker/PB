@@ -81,6 +81,8 @@ class OrderControlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             result = refresh(Path(directory), ["whatsapp"])
             self.assertEqual(result["results"][0]["status"], "capture_required")
+            self.assertIn("press Refresh", result["results"][0]["message"])
+            self.assertNotIn("Capture WhatsApp", result["results"][0]["message"])
 
 
 if __name__ == "__main__":
