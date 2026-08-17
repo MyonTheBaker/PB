@@ -1,17 +1,23 @@
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import date, datetime
 from email.message import EmailMessage
 from pathlib import Path
 
 from email_order_processor import extract_order
+from order_email_ingest import credential_from_environment
 from order_control_tower import record_post_preparation, write_navigation_request
 from order_report_renderer import formatted_product_lines, operation_time, render_png, week_bounds
 from order_source_refresh import refresh
 
 
 class OrderControlTests(unittest.TestCase):
+    def test_email_credential_prefers_process_environment(self):
+        with patch.dict("os.environ", {"ORDER_TEST_PASSWORD": "secret"}, clear=False):
+            self.assertEqual(credential_from_environment("ORDER_TEST_PASSWORD"), "secret")
+
     def test_week_bounds_are_monday_to_sunday(self):
         self.assertEqual(week_bounds(date(2026, 8, 16), 1), (date(2026, 8, 17), date(2026, 8, 23)))
 

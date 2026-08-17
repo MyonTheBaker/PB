@@ -28,6 +28,22 @@ def safe_name(value: str | None, fallback: str) -> str:
     return value[:120] or fallback
 
 
+def credential_from_environment(name: str) -> str | None:
+    """Read a process credential, falling back to the Windows user environment registry."""
+    value = os.environ.get(name)
+    if value:
+        return value
+    if os.name != "nt":
+        return None
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+            stored, _kind = winreg.QueryValueEx(key, name)
+        return str(stored).strip() or None
+    except (FileNotFoundError, OSError):
+        return None
+
+
 def addresses(message: Message, header: str) -> list[str]:
     return [address.casefold() for _, address in getaddresses(message.get_all(header, [])) if address]
 
@@ -132,7 +148,7 @@ def sync(root: Path, config_path: Path) -> dict:
     account = cfg["username"]
     mailbox = cfg.get("mailbox", "INBOX")
     password_env = cfg.get("password_env", "ORDER_CONTROL_EMAIL_PASSWORD")
-    password = os.environ.get(password_env)
+    password = credential_from_environment(password_env)
     if not password:
         raise RuntimeError(f"Required environment variable is not set: {password_env}")
 
