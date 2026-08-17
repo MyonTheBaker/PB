@@ -5,10 +5,13 @@ from unittest.mock import patch
 from datetime import date, datetime
 from email.message import EmailMessage
 from pathlib import Path
+from PyQt5.QtCore import QSettings
 
 from email_order_processor import extract_order, is_reconciled_order_row
 from order_email_ingest import credential_from_environment
-from order_control_tower import record_post_preparation, write_navigation_request
+from order_control_tower import (
+    record_post_preparation, save_source_enabled, saved_source_enabled, write_navigation_request,
+)
 from order_report_renderer import formatted_product_lines, operation_time, render_png, week_bounds
 from order_source_refresh import refresh, run_whatsapp_automation
 from whatsapp_order_exporter.receiver import incremental_cutoff, initialise_database
@@ -117,6 +120,15 @@ class OrderControlTests(unittest.TestCase):
             connection.close()
             self.assertEqual(row[:4], ("prepared_for_operator", None, "2026-08-17", "2026-08-23"))
             self.assertEqual(Path(row[4]), report.resolve())
+
+    def test_refresh_source_selection_persists_between_sessions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings_path = str(Path(directory) / "order-control.ini")
+            first = QSettings(settings_path, QSettings.IniFormat)
+            save_source_enabled(first, "whatsapp", False)
+            second = QSettings(settings_path, QSettings.IniFormat)
+            self.assertFalse(saved_source_enabled(second, "whatsapp"))
+            self.assertTrue(saved_source_enabled(second, "email"))
 
     def test_whatsapp_refresh_requests_capture_when_none_exists(self):
         with tempfile.TemporaryDirectory() as directory:

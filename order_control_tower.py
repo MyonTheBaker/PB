@@ -12,10 +12,10 @@ import uuid
 from datetime import date, timedelta
 from pathlib import Path
 
-from PyQt5.QtCore import QProcess, Qt, QTimer
+from PyQt5.QtCore import QProcess, QSettings, Qt, QTimer
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
-    QAction, QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu,
+    QApplication, QCheckBox, QFrame, QHBoxLayout, QLabel, QMainWindow,
     QMessageBox, QPushButton, QScrollArea, QToolButton, QVBoxLayout, QWidget,
 )
 
@@ -27,7 +27,16 @@ NAVIGATION_REQUEST = PROJECT / "tmp" / "control_tower_navigation.json"
 CAPTURE_RECEIVER = PROJECT / "whatsapp_order_exporter" / "receiver.py"
 HR_CONTROL_TOWER = PROJECT / "hr_control_tower.py"
 PYTHONW = PROJECT / ".venv" / "Scripts" / "pythonw.exe"
-SOURCE_LABELS = {"whatsapp": "WhatsApp", "email": "Email", "web": "Web Crawler"}
+SOURCE_LABELS = {"whatsapp": "WhatsApp", "email": "Email", "web": "Web Crawl"}
+
+
+def saved_source_enabled(settings: QSettings, source: str) -> bool:
+    return settings.value(f"refresh_sources/{source}", True, type=bool)
+
+
+def save_source_enabled(settings: QSettings, source: str, checked: bool) -> None:
+    settings.setValue(f"refresh_sources/{source}", checked)
+    settings.sync()
 
 
 def monday(value: date) -> date:
@@ -206,53 +215,27 @@ class OverviewScrollArea(QScrollArea):
         self.overview.fit_width(self.viewport().width())
 
 
-class SourceSelector(QToolButton):
-    def __init__(self) -> None:
+class SourceSelector(QWidget):
+    def __init__(self, settings: QSettings | None = None) -> None:
         super().__init__()
-        self.setPopupMode(QToolButton.InstantPopup)
-        self.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        self.menu = QMenu(self)
-        self.setMenu(self.menu)
-        self.actions: dict[str, QAction] = {}
-        all_action = self.menu.addAction("All")
-        all_action.setCheckable(True)
-        all_action.setChecked(True)
-        all_action.triggered.connect(self._all_toggled)
-        self.actions["all"] = all_action
-        self.menu.addSeparator()
+        self.settings = settings or QSettings("Park Baeckerei", "Order Control Tower")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 3, 8, 3)
+        layout.setSpacing(10)
+        self.checkboxes: dict[str, QCheckBox] = {}
         for key, label in SOURCE_LABELS.items():
-            action = self.menu.addAction(label)
-            action.setCheckable(True)
-            action.setChecked(True)
-            action.triggered.connect(self._source_toggled)
-            self.actions[key] = action
-        self._update_text()
+            checkbox = QCheckBox(label)
+            checkbox.setChecked(saved_source_enabled(self.settings, key))
+            checkbox.toggled.connect(lambda checked, source=key: self._save(source, checked))
+            checkbox.setStyleSheet("QCheckBox { spacing: 4px; font-size: 13px; }")
+            self.checkboxes[key] = checkbox
+            layout.addWidget(checkbox)
 
     def selected_sources(self) -> list[str]:
-        return [key for key in SOURCE_LABELS if self.actions[key].isChecked()]
+        return [key for key in SOURCE_LABELS if self.checkboxes[key].isChecked()]
 
-    def _all_toggled(self, checked: bool) -> None:
-        for key in SOURCE_LABELS:
-            self.actions[key].setChecked(checked)
-        self._update_text()
-
-    def _source_toggled(self) -> None:
-        selected = self.selected_sources()
-        self.actions["all"].blockSignals(True)
-        self.actions["all"].setChecked(len(selected) == len(SOURCE_LABELS))
-        self.actions["all"].blockSignals(False)
-        self._update_text()
-
-    def _update_text(self) -> None:
-        selected = self.selected_sources()
-        if len(selected) == len(SOURCE_LABELS):
-            label = "All sources"
-        elif not selected:
-            label = "Select sources"
-        else:
-            label = ", ".join(SOURCE_LABELS[key] for key in selected)
-        self.setText(f"Sources: {label}  ▾")
-
+    def _save(self, source: str, checked: bool) -> None:
+        save_source_enabled(self.settings, source, checked)
 
 class OrderControlTower(QMainWindow):
     def __init__(self) -> None:
@@ -281,7 +264,7 @@ class OrderControlTower(QMainWindow):
         heading.addWidget(title)
         heading.addStretch()
         self.source_selector = SourceSelector()
-        self.source_selector.setStyleSheet("padding: 8px 12px; background: white; border: 1px solid #d5d1ca; border-radius: 7px;")
+        self.source_selector.setStyleSheet("background: white; border: 1px solid #d5d1ca; border-radius: 7px;")
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.setStyleSheet("padding: 9px 22px; color: white; background: #b7362d; border: 0; border-radius: 7px; font-weight: 700;")
         self.refresh_button.clicked.connect(self.refresh_orders)
