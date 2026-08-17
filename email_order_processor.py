@@ -434,7 +434,9 @@ def build_combined_overviews(root: Path, affected_dates: set[str]) -> None:
             "product": product, "quantity": None, "unit": None,
             "fulfillment_date": order["fulfillment_date"], "status": order["status"],
             "notes": notes, "confidence": order["confidence"],
-            "source_ids_json": json.dumps([f"email:{order['source_email_id']}"]),
+            "source_ids_json": json.dumps([
+                f"email:{order['source_email_id']}", f"source:{order['source_type']}"
+            ]),
         })
     run_id = f"email-combined-{datetime.now().strftime('%Y%m%dT%H%M%S')}"
     synthesis_id = str(uuid.uuid4())

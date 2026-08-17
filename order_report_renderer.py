@@ -14,6 +14,28 @@ from PIL import Image, ImageDraw, ImageFont
 
 PLATTER_DICTIONARY_PATH = Path(__file__).with_name("caterspot_platter_dictionary.json")
 
+ORDER_CARD_COLORS = {
+    "platform_delivery": "#FFF4DD",
+    "pb_delivery": "#FFE6E6",
+    "full_setup": "#EEF0FF",
+    "marketplace": "#EEF4E9",
+    "unknown": "#F1F1F1",
+}
+
+
+def order_card_fill(customer: str | None, notes: str | None, source_ids_json: str | None = None) -> str:
+    """Choose a production card color from platform and fulfilment semantics."""
+    evidence = " ".join((customer or "", notes or "", source_ids_json or "")).casefold()
+    if any(marker in evidence for marker in ("full setup", "setup by pb", "pb staff setup")):
+        return ORDER_CARD_COLORS["full_setup"]
+    if any(platform in evidence for platform in ("caterspot", "whyq", "feeds", "smartbites", "eatfirst")):
+        return ORDER_CARD_COLORS["platform_delivery"]
+    if any(platform in evidence for platform in ("oddle", "foodpanda", "food panda", "grab")):
+        return ORDER_CARD_COLORS["marketplace"]
+    if "lalamove" in evidence:
+        return ORDER_CARD_COLORS["pb_delivery"]
+    return ORDER_CARD_COLORS["unknown"]
+
 
 def _platter_dictionary() -> dict:
     if not PLATTER_DICTIONARY_PATH.exists():
@@ -185,7 +207,6 @@ def render_png(path: Path, title: str, subtitle: str, rows: list[sqlite3.Row], s
     grouped: dict[str, list[sqlite3.Row]] = {}
     for row in rows:
         grouped.setdefault(row["fulfillment_date"] or "", []).append(row)
-    fills = ["#FFF4DD", "#F1F1F1", "#EEF4E9", "#EEF0FF"]
     for day_index in range(7):
         day = start + timedelta(days=day_index)
         x0, x1 = margin + day_index * (col_w + gutter), margin + day_index * (col_w + gutter) + col_w
@@ -207,19 +228,20 @@ def render_png(path: Path, title: str, subtitle: str, rows: list[sqlite3.Row], s
                 qty = f"{row['quantity']:g} {row['unit'] or ''}".strip() if row["quantity"] is not None else ""
                 lines.extend(formatted_product_lines(f"{qty} {row['product']}".strip()))
             lines.extend((line, False) for line in textwrap.wrap(remaining, 25)[:3])
-            prepared.append((customer, status, card_rows, time_label, lines))
-        natural_height = sum(88 + 22 * len(lines) for *_, lines in prepared)
+            source_ids = " ".join(str(row["source_ids_json"]) for row in card_rows if "source_ids_json" in row.keys())
+            prepared.append((customer, status, card_rows, time_label, lines, source_ids))
+        natural_height = sum(88 + 22 * len(lines) for *_, lines, _source_ids in prepared)
         scale = max(0.5, min(1.0, (height - 38 - y) / max(natural_height, 1)))
         font_size, small_size = max(9, round(17 * scale)), max(8, round(15 * scale))
         regular, bold, card_small = _font("arial.ttf", font_size), _font("arialbd.ttf", font_size), _font("arial.ttf", small_size)
         line_height, header_height, footer_height, card_gap = max(11, round(22 * scale)), max(22, round(40 * scale)), max(20, round(36 * scale)), max(6, round(12 * scale))
-        for index, (customer, status, card_rows, time_label, lines) in enumerate(prepared):
+        for index, (customer, status, card_rows, time_label, lines, source_ids) in enumerate(prepared):
             card_h = header_height + line_height * len(lines) + footer_height
             if y + card_h > height - 38:
                 draw.text((x0 + 8, height - 34), f"+{len(cards) - index} more", font=body_bold, fill="#E53935")
                 break
             confidence = min(float(row["confidence"]) for row in card_rows)
-            fill = "#FFE6E6" if status.lower() == "cancelled" else fills[index % len(fills)]
+            fill = "#FFE6E6" if status.lower() == "cancelled" else order_card_fill(customer, notes, source_ids)
             border = "#E53935" if confidence < 0.7 else "#F2A23A"
             draw.rounded_rectangle((x0, y, x1, y + card_h), radius=4, fill=fill, outline=border, width=3)
             bbox = draw.textbbox((0, 0), time_label, font=bold)

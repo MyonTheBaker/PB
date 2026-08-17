@@ -13,12 +13,21 @@ from order_email_ingest import credential_from_environment
 from order_control_tower import (
     record_post_preparation, save_source_enabled, saved_source_enabled, write_navigation_request,
 )
-from order_report_renderer import formatted_product_lines, operation_time, render_png, week_bounds
+from order_report_renderer import formatted_product_lines, operation_time, order_card_fill, render_png, week_bounds
 from order_source_refresh import refresh, run_whatsapp_automation
 from whatsapp_order_exporter.receiver import incremental_cutoff, initialise_database
 
 
 class OrderControlTests(unittest.TestCase):
+    def test_order_card_colors_follow_platform_and_fulfilment_rules(self):
+        self.assertEqual(order_card_fill("CaterSpot ABCD-EFGH", "Delivery 8:00 AM"), "#FFF4DD")
+        self.assertEqual(order_card_fill("EatFirst", "Delivery 11:30 AM"), "#FFF4DD")
+        self.assertEqual(order_card_fill("Client", "Delivery by Lalamove"), "#FFE6E6")
+        self.assertEqual(order_card_fill("Client", "Full Setup by PB staff"), "#EEF0FF")
+        self.assertEqual(order_card_fill("Chinny", "Delivery 9:00 AM", '["source:oddle_email"]'), "#EEF4E9")
+        self.assertEqual(order_card_fill("Grab preorder", "Pickup 9:00 AM"), "#EEF4E9")
+        self.assertEqual(order_card_fill("Direct customer", "Collection 9:00 AM"), "#F1F1F1")
+
     def test_email_credential_prefers_process_environment(self):
         with patch.dict("os.environ", {"ORDER_TEST_PASSWORD": "secret"}, clear=False):
             self.assertEqual(credential_from_environment("ORDER_TEST_PASSWORD"), "secret")
