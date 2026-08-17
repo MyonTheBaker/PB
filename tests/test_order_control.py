@@ -149,6 +149,13 @@ class OrderControlTests(unittest.TestCase):
             connection.close()
             self.assertEqual(incremental_cutoff(root), "2026-08-17T00:36:00+00:00")
 
+    def test_extension_waits_for_chat_and_recovers_missing_content_script(self):
+        extension = Path(__file__).parents[1] / "whatsapp_order_exporter" / "extension"
+        content = (extension / "content.js").read_text(encoding="utf-8")
+        background = (extension / "background.js").read_text(encoding="utf-8")
+        self.assertIn("waitForChatTitle(request.expectedChat)", content)
+        self.assertIn("await chrome.tabs.reload(tabId)", background)
+
 
 if __name__ == "__main__":
     unittest.main()

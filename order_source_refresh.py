@@ -75,10 +75,10 @@ def refresh(root: Path, sources: list[str], automate_whatsapp: bool = False) -> 
                 message = ("WhatsApp: latest capture is already imported" if status == "up_to_date"
                            else "WhatsApp: select WhatsApp, press Refresh, and complete the extension capture")
                 results.append({"source": source, "status": status, "message": message})
-            except Exception:
+            except Exception as exc:
                 results.append({
-                    "source": source, "status": "capture_required",
-                    "message": "WhatsApp: select WhatsApp, press Refresh, and complete the extension capture",
+                    "source": source, "status": "error",
+                    "message": f"WhatsApp automation failed: {exc}",
                 })
         elif source == "web":
             results.append({

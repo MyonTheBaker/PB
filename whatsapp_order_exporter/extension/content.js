@@ -1,5 +1,5 @@
 (() => {
-  const CAPTURE_PROTOCOL_VERSION = "0.6.1";
+  const CAPTURE_PROTOCOL_VERSION = "0.6.4";
   const clean = (value) => (value || "").replace(/[\u200e\u200f\u2060]/g, "").trim();
   const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -11,6 +11,16 @@
     const candidates = header ? [...header.querySelectorAll("[title]")] : [];
     const titled = candidates.map((node) => clean(node.getAttribute("title"))).filter(Boolean);
     return titled[0] || clean(header?.querySelector("span")?.textContent);
+  }
+
+  async function waitForChatTitle(expectedChat, timeoutMs = 10000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const title = currentChatTitle();
+      if (title === expectedChat) return title;
+      await pause(250);
+    }
+    return currentChatTitle();
   }
 
   function captureMessages() {
@@ -278,8 +288,7 @@
             const row = target?.closest('[role="row"]');
             if (!row) throw new Error(`Chat “${request.expectedChat}” is not visible in the chat list.`);
             row.click();
-            await pause(1200);
-            title = currentChatTitle();
+            title = await waitForChatTitle(request.expectedChat);
           }
           if (title !== request.expectedChat) throw new Error(`Could not open “${request.expectedChat}”.`);
           sendResponse({ ok: true, chat_title: title });

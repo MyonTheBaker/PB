@@ -1,6 +1,7 @@
 const RECEIVER = "http://127.0.0.1:8765";
-const CAPTURE_PROTOCOL_VERSION = "0.6.1";
+const CAPTURE_PROTOCOL_VERSION = "0.6.4";
 let working = false;
+const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 async function receiverPost(path, body) {
   const response = await fetch(`${RECEIVER}${path}`, {
@@ -20,6 +21,22 @@ async function capture(tabId, type, expectedChat, cutoffAt = null) {
   return response;
 }
 
+async function ensureCapturePage(tabId) {
+  try {
+    return await chrome.tabs.sendMessage(tabId, { type: "CAPTURE_VERSION" });
+  } catch (error) {
+    if (!String(error?.message || error).includes("Receiving end does not exist")) throw error;
+    await chrome.tabs.reload(tabId);
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      await pause(250);
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.status === "complete") break;
+    }
+    await pause(750);
+    return chrome.tabs.sendMessage(tabId, { type: "CAPTURE_VERSION" });
+  }
+}
+
 async function runNextJob() {
   if (working) return;
   working = true;
@@ -34,7 +51,7 @@ async function runNextJob() {
     if (!targetTab?.id) throw new Error("WhatsApp Web is not open.");
     const tabId = targetTab.id;
     await chrome.tabs.update(tabId, { active: true });
-    const version = await chrome.tabs.sendMessage(tabId, { type: "CAPTURE_VERSION" });
+    const version = await ensureCapturePage(tabId);
     if (version?.version !== CAPTURE_PROTOCOL_VERSION) {
       throw new Error("WhatsApp capture extension/page version mismatch. Reload the extension and WhatsApp Web once.");
     }
