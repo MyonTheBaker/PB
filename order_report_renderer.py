@@ -70,11 +70,6 @@ def render_png(path: Path, title: str, subtitle: str, rows: list[sqlite3.Row], s
     draw = ImageDraw.Draw(image)
     draw.text((margin, 20), title, font=title_font, fill="#2A2A2A")
     draw.text((margin, 68), subtitle, font=small, fill="#777777")
-    if source_gap:
-        warning = "SOURCE DATA GAP - ORDERS FOR THIS WEEK ARE NOT COMPLETE"
-        bbox = draw.textbbox((0, 0), warning, font=day_font)
-        draw.rectangle((width - bbox[2] - 46, 20, width - 24, 62), fill="#FFE3E3", outline="#D60000", width=2)
-        draw.text((width - bbox[2] - 35, 28), warning, font=day_font, fill="#D60000")
     top = 118
     col_w = (width - 2 * margin - 6 * gutter) // 7
     grouped: dict[str, list[sqlite3.Row]] = {}

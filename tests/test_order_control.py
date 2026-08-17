@@ -82,6 +82,19 @@ class OrderControlTests(unittest.TestCase):
             self.assertTrue(target.exists())
             self.assertGreater(target.stat().st_size, 1_000)
 
+    def test_data_gap_flag_does_not_add_a_visual_badge(self):
+        with tempfile.TemporaryDirectory() as directory:
+            connection = sqlite3.connect(":memory:")
+            connection.row_factory = sqlite3.Row
+            connection.execute("CREATE TABLE items(customer,status,notes,product,quantity,unit,fulfillment_date,confidence)")
+            rows = list(connection.execute("SELECT * FROM items"))
+            plain = Path(directory) / "plain.png"
+            gap = Path(directory) / "gap.png"
+            args = ("Preorder Overview", "03-09 Aug", rows, date(2026, 8, 3))
+            render_png(plain, *args, source_gap=False)
+            render_png(gap, *args, source_gap=True)
+            self.assertEqual(plain.read_bytes(), gap.read_bytes())
+
     def test_back_navigation_targets_preorders_page_atomically(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "control_tower_navigation.json"

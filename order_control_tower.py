@@ -12,11 +12,11 @@ import uuid
 from datetime import date, timedelta
 from pathlib import Path
 
-from PyQt5.QtCore import QProcess, QSize, Qt, QTimer
+from PyQt5.QtCore import QProcess, Qt, QTimer
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
     QAction, QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu,
-    QMessageBox, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
+    QMessageBox, QPushButton, QScrollArea, QToolButton, QVBoxLayout, QWidget,
 )
 
 
@@ -160,10 +160,8 @@ class OverviewLabel(QLabel):
     def __init__(self) -> None:
         super().__init__()
         self._source = QPixmap()
-        self.setAlignment(Qt.AlignCenter)
-        self.setMinimumSize(640, 420)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.setStyleSheet("background: white; border: 1px solid #e5e7eb; border-radius: 10px;")
+        self.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+        self.setStyleSheet("background: white;")
 
     def set_overview(self, path: Path | None) -> None:
         self._source = QPixmap(str(path)) if path else QPixmap()
@@ -172,17 +170,40 @@ class OverviewLabel(QLabel):
             self.setText("No preorder overview has been generated for this week.")
         else:
             self.setText("")
-            self._fit()
+            self.fit_width(self.parentWidget().width() if self.parentWidget() else self._source.width())
+
+    def fit_width(self, width: int) -> None:
+        if self._source.isNull():
+            return
+        scaled = self._source.scaledToWidth(max(640, width), Qt.SmoothTransformation)
+        self.setPixmap(scaled)
+        self.setFixedSize(scaled.size())
+
+
+class OverviewScrollArea(QScrollArea):
+    def __init__(self) -> None:
+        super().__init__()
+        self.overview = OverviewLabel()
+        self.setWidget(self.overview)
+        self.setWidgetResizable(False)
+        self.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+        self.setMinimumSize(640, 420)
+        self.setStyleSheet(
+            "QScrollArea { background: white; border: 1px solid #e5e7eb; border-radius: 10px; }"
+            "QScrollArea > QWidget > QWidget { background: white; }"
+        )
+
+    def set_overview(self, path: Path | None) -> None:
+        self.overview.set_overview(path)
+        self._fit_width()
+        self.verticalScrollBar().setValue(0)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self._fit()
+        self._fit_width()
 
-    def _fit(self) -> None:
-        if self._source.isNull():
-            return
-        available = self.size() - QSize(28, 28)
-        self.setPixmap(self._source.scaled(available, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+    def _fit_width(self) -> None:
+        self.overview.fit_width(self.viewport().width())
 
 
 class SourceSelector(QToolButton):
@@ -291,7 +312,7 @@ class OrderControlTower(QMainWindow):
         self.next_button = self._arrow("›", "Next week")
         self.previous_button.clicked.connect(lambda: self.change_week(-1))
         self.next_button.clicked.connect(lambda: self.change_week(1))
-        self.overview = OverviewLabel()
+        self.overview = OverviewScrollArea()
         overview_row.addWidget(self.previous_button)
         overview_row.addWidget(self.overview, 1)
         overview_row.addWidget(self.next_button)
