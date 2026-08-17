@@ -105,6 +105,20 @@ def incremental_cutoff(data_root: Path) -> str | None:
     return (previous - overlap).astimezone(dt.timezone.utc).isoformat(timespec="seconds")
 
 
+def import_completed_capture(data_root: Path, capture_id: str | None) -> dict[str, Any]:
+    try:
+        from .import_browser_capture import import_capture
+    except ImportError:
+        from import_browser_capture import import_capture
+    try:
+        result = import_capture(data_root, data_root.parent, capture_id, None)
+        return {"status": "imported", **result}
+    except SystemExit as exc:
+        if "already imported" in str(exc):
+            return {"status": "already_imported", "capture_id": capture_id}
+        raise RuntimeError(str(exc)) from exc
+
+
 def safe_header(value: str, limit: int = 500) -> str:
     return value.replace("\r", " ").replace("\n", " ").strip()[:limit]
 
@@ -332,9 +346,20 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     job = self.server.automation_jobs.get(job_id)  # type: ignore[attr-defined]
                     if not job:
                         raise ValueError("Unknown automation job.")
-                    job["status"] = "completed" if payload.get("ok") else "failed"
+                    succeeded = bool(payload.get("ok"))
+                    job_result = dict(payload.get("result") or {})
+                    if succeeded:
+                        capture_id = (job_result.get("capture") or {}).get("capture_id")
+                        try:
+                            job_result["import"] = import_completed_capture(
+                                self.server.data_root, capture_id  # type: ignore[attr-defined]
+                            )
+                        except Exception as error:
+                            succeeded = False
+                            payload["error"] = f"Capture saved but import failed: {error}"
+                    job["status"] = "completed" if succeeded else "failed"
                     job["completed_at"] = utc_now()
-                    job["result"] = payload.get("result")
+                    job["result"] = job_result
                     job["error"] = payload.get("error")
                     result = {"ok": True, "job_id": job_id, "status": job["status"]}
             self._json(201, result)

@@ -59,9 +59,11 @@ def refresh(root: Path, sources: list[str], automate_whatsapp: bool = False) -> 
                 results.append({"source": source, "status": "error", "message": f"Email: {exc}"})
         elif source == "whatsapp":
             try:
+                automation_job = None
                 if automate_whatsapp:
-                    run_whatsapp_automation()
-                imported = import_capture(root / "browser", root, None, None)
+                    automation_job = run_whatsapp_automation()
+                automatic_import = ((automation_job or {}).get("result") or {}).get("import")
+                imported = automatic_import if automatic_import and automatic_import.get("status") == "imported" else import_capture(root / "browser", root, None, None)
                 results.append({
                     "source": source, "status": "ok",
                     "message": (f"WhatsApp: imported {imported['messages']} message(s) and "

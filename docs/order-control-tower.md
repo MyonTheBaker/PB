@@ -91,6 +91,7 @@ Important operational rule: image-only PDFs or ambiguous quantities require huma
 The local SQLite database includes:
 
 - `ingest_runs`, `messages`, `media`, `syntheses`, and `order_items` for WhatsApp evidence and synthesized items;
+- `message_revisions` for the prior version of an overlapping WhatsApp message before its canonical row is updated by an incremental capture;
 - `email_sync_state`, `email_messages`, and `email_attachments` for immutable mailbox evidence and checkpoints;
 - `email_order_processing` for classification outcomes;
 - `canonical_orders` and `canonical_order_items` for normalized, revisioned orders;

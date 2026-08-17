@@ -57,8 +57,8 @@ def import_capture(browser_root: Path, order_root: Path, capture_id: str | None,
     raw_dir = order_root / "raw" / run_id
     media_dir = order_root / "media" / run_id
     packet_dir = order_root / "analysis-packets"
-    raw_dir.mkdir(parents=True, exist_ok=bool(merge_run_id))
-    media_dir.mkdir(parents=True, exist_ok=bool(merge_run_id))
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    media_dir.mkdir(parents=True, exist_ok=True)
     packet_dir.mkdir(parents=True, exist_ok=True)
     archived_payload = raw_dir / payload_path.name
     shutil.copy2(payload_path, archived_payload)
@@ -74,6 +74,12 @@ def import_capture(browser_root: Path, order_root: Path, capture_id: str | None,
         "WHERE cm.capture_id=? ORDER BY cm.ordinal, ma.media_index", (capture["capture_id"],)))
     packet_media = []
     with target:
+        target.execute(
+            """CREATE TABLE IF NOT EXISTS message_revisions(
+               id TEXT PRIMARY KEY, message_id TEXT NOT NULL, run_id TEXT NOT NULL,
+               captured_at TEXT, sent_at TEXT, sender TEXT, body TEXT NOT NULL,
+               ordinal INTEGER NOT NULL, UNIQUE(message_id,run_id))"""
+        )
         if not merge_run_id:
             target.execute("INSERT INTO ingest_runs VALUES(?,?,?,?,?,?)", (
                 run_id, payload_path.name, digest(archived_payload), capture["captured_at"],
@@ -83,10 +89,19 @@ def import_capture(browser_root: Path, order_root: Path, capture_id: str | None,
             # virtualized-browser revision.
             target.execute("UPDATE messages SET ordinal=-ordinal-1 WHERE run_id=?", (run_id,))
         for row in message_rows:
-            if merge_run_id:
+            existing_message = target.execute(
+                "SELECT run_id,sent_at,sender,body,ordinal FROM messages WHERE id=?", (row["id"],)
+            ).fetchone()
+            if existing_message:
                 target.execute(
-                    "UPDATE messages SET sent_at=?, sender=?, body=?, ordinal=? WHERE id=? AND run_id=?",
-                    (row["sent_at"], row["sender"], row["body"], row["ordinal"], row["id"], run_id))
+                    "INSERT OR IGNORE INTO message_revisions VALUES(?,?,?,?,?,?,?,?)",
+                    (str(uuid.uuid4()), row["id"], existing_message[0], capture["captured_at"],
+                     existing_message[1], existing_message[2], existing_message[3], existing_message[4]),
+                )
+                target.execute(
+                    "UPDATE messages SET run_id=?,sent_at=?,sender=?,body=?,ordinal=? WHERE id=?",
+                    (run_id, row["sent_at"], row["sender"], row["body"], row["ordinal"], row["id"]),
+                )
             else:
                 target.execute("INSERT INTO messages VALUES(?,?,?,?,?,?)", (
                     row["id"], run_id, row["sent_at"], row["sender"], row["body"], row["ordinal"]))

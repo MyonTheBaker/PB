@@ -47,8 +47,9 @@ async function runCapture() {
     const job = await waitForJob(started.job_id);
     const capture = job.result?.capture || {};
     const media = job.result?.media || {};
+    const imported = job.result?.import || {};
     setStatus(
-      `Saved ${capture.message_count || 0} messages (${capture.new_messages || 0} new) and ${media.downloaded || 0} media files.`,
+      `Saved and imported ${imported.messages ?? capture.message_count ?? 0} messages and ${imported.media ?? media.downloaded ?? 0} media files.`,
       media.failed ? "warning" : "ok"
     );
   } catch (error) {
