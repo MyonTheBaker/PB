@@ -6,7 +6,7 @@ from datetime import date, datetime
 from email.message import EmailMessage
 from pathlib import Path
 
-from email_order_processor import extract_order
+from email_order_processor import extract_order, is_reconciled_order_row
 from order_email_ingest import credential_from_environment
 from order_control_tower import record_post_preparation, write_navigation_request
 from order_report_renderer import formatted_product_lines, operation_time, render_png, week_bounds
@@ -61,6 +61,11 @@ class OrderControlTests(unittest.TestCase):
         self.assertEqual(order.customer, "Chinny Liew")
         self.assertEqual(order.status, "confirmed")
         self.assertEqual(len(order.items), 2)
+
+    def test_reconciliation_survives_regenerated_synthesis_row_ids(self):
+        row = {"id": "new-row-id", "customer": "Chinny Liew", "fulfillment_date": "2026-08-17"}
+        order = {"customer": "Chinny Liew", "fulfillment_date": "2026-08-17"}
+        self.assertTrue(is_reconciled_order_row(row, order, {"old-row-id"}))
 
     def test_renderer_creates_png(self):
         with tempfile.TemporaryDirectory() as directory:

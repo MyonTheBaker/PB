@@ -384,6 +384,17 @@ def process_pending(root: Path) -> dict:
     return {**counts, "affected_dates": sorted(affected_dates)}
 
 
+def is_reconciled_order_row(row, order, matched_ids: set[str]) -> bool:
+    if row["id"] in matched_ids:
+        return True
+    canonical_customer = (order["customer"] or "").strip().casefold()
+    return bool(
+        canonical_customer
+        and (row["customer"] or "").strip().casefold() == canonical_customer
+        and row["fulfillment_date"] == order["fulfillment_date"]
+    )
+
+
 def build_combined_overviews(root: Path, affected_dates: set[str]) -> None:
     connection = sqlite3.connect(root / "order-control.sqlite3")
     connection.row_factory = sqlite3.Row
@@ -402,7 +413,11 @@ def build_combined_overviews(root: Path, affected_dates: set[str]) -> None:
     for order in latest_orders:
         rec = connection.execute("SELECT * FROM order_reconciliation WHERE canonical_order_id=?", (order["id"],)).fetchone()
         matched = set(json.loads(rec["matched_order_item_ids_json"])) if rec else set()
-        rows = [row for row in rows if row["id"] not in matched]
+        # Synthesis row IDs are regenerated whenever a fresh WhatsApp capture is
+        # synthesized, so reconciliation IDs from the preceding synthesis are
+        # not sufficient on their own.  Keep the stable customer/date identity
+        # as a fallback to prevent the same cross-channel order reappearing.
+        rows = [row for row in rows if not is_reconciled_order_row(row, order, matched)]
         items = connection.execute("SELECT * FROM canonical_order_items WHERE order_id=? ORDER BY rowid", (order["id"],)).fetchall()
         product = "; ".join(f"{item['quantity']:g} {item['unit']} {item['product']}" for item in items)
         source_label = order["source_type"].replace("_email", "").title()
