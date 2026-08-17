@@ -1,5 +1,5 @@
 (() => {
-  const CAPTURE_PROTOCOL_VERSION = "0.6.4";
+  const CAPTURE_PROTOCOL_VERSION = "0.6.5";
   const clean = (value) => (value || "").replace(/[\u200e\u200f\u2060]/g, "").trim();
   const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -285,9 +285,9 @@
           if (title !== request.expectedChat) {
             const target = [...document.querySelectorAll("span[title]")]
               .find((node) => node.getAttribute("title") === request.expectedChat);
-            const row = target?.closest('[role="row"]');
-            if (!row) throw new Error(`Chat “${request.expectedChat}” is not visible in the chat list.`);
-            row.click();
+            const cell = target?.closest('[data-testid="cell-frame-container"]');
+            if (!cell) throw new Error(`Chat “${request.expectedChat}” is not visible in the chat list.`);
+            cell.click();
             title = await waitForChatTitle(request.expectedChat);
           }
           if (title !== request.expectedChat) throw new Error(`Could not open “${request.expectedChat}”.`);

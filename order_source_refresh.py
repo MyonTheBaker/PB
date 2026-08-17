@@ -28,7 +28,7 @@ def receiver_json(path: str, payload: dict | None = None) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-def run_whatsapp_automation(timeout_seconds: int = 240) -> dict:
+def _run_whatsapp_job(timeout_seconds: int) -> dict:
     started = receiver_json("/automation/start", {})
     job_id = started["job_id"]
     deadline = time.monotonic() + timeout_seconds
@@ -40,6 +40,20 @@ def run_whatsapp_automation(timeout_seconds: int = 240) -> dict:
             raise RuntimeError(job.get("error") or "WhatsApp automation failed")
         time.sleep(1)
     raise TimeoutError("WhatsApp extension did not complete the capture within four minutes")
+
+
+def run_whatsapp_automation(timeout_seconds: int = 240) -> dict:
+    for attempt in range(2):
+        try:
+            return _run_whatsapp_job(timeout_seconds)
+        except RuntimeError as exc:
+            if attempt == 0 and "Could not open" in str(exc):
+                # Older loaded extension workers can report failure just before
+                # WhatsApp finishes opening the row they clicked. By the time a
+                # second job is claimed, the intended chat is ready.
+                continue
+            raise
+    raise RuntimeError("WhatsApp automation failed after opening the target chat")
 
 
 def refresh(root: Path, sources: list[str], automate_whatsapp: bool = False) -> dict:

@@ -146,6 +146,17 @@ class OrderControlTests(unittest.TestCase):
             result = run_whatsapp_automation(timeout_seconds=1)
         self.assertEqual(result["status"], "completed")
 
+    def test_whatsapp_automation_retries_chat_opening_race(self):
+        responses = [
+            {"job_id": "job-1"},
+            {"job": {"id": "job-1", "status": "failed", "error": "Could not open PB Advance Orders"}},
+            {"job_id": "job-2"},
+            {"job": {"id": "job-2", "status": "completed", "result": {"capture": {"ok": True}}}},
+        ]
+        with patch("order_source_refresh.receiver_json", side_effect=responses):
+            result = run_whatsapp_automation(timeout_seconds=1)
+        self.assertEqual(result["id"], "job-2")
+
     def test_incremental_cutoff_persists_edit_window_and_margin(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -166,6 +177,7 @@ class OrderControlTests(unittest.TestCase):
         content = (extension / "content.js").read_text(encoding="utf-8")
         background = (extension / "background.js").read_text(encoding="utf-8")
         self.assertIn("waitForChatTitle(request.expectedChat)", content)
+        self.assertIn("cell-frame-container", content)
         self.assertIn("await chrome.tabs.reload(tabId)", background)
 
 

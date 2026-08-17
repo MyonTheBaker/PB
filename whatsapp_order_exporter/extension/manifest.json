@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Park Bäckerei WhatsApp Order Capture",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "description": "Read-only capture of the PB Advance Orders chat to a local archive.",
   "permissions": ["activeTab", "storage", "tabs", "alarms"],
   "host_permissions": [
