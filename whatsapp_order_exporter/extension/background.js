@@ -1,5 +1,5 @@
 const RECEIVER = "http://127.0.0.1:8765";
-const CAPTURE_PROTOCOL_VERSION = "0.6.6";
+const CAPTURE_PROTOCOL_VERSION = "0.7.0";
 let working = false;
 const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -18,6 +18,42 @@ async function capture(tabId, type, expectedChat, cutoffAt = null) {
     type, expectedChat, maxSteps: 80, cutoffAt
   });
   if (!response?.ok) throw new Error(response?.error || `${type} failed.`);
+  return response;
+}
+
+async function openTargetChat(tabId, expectedChat) {
+  let response = await chrome.tabs.sendMessage(tabId, {
+    type: "OPEN_TARGET_CHAT", expectedChat
+  });
+  if (response?.ok) return response;
+  if (!response?.needs_trusted_click || !response?.click_point) {
+    throw new Error(response?.error || `Could not open “${expectedChat}”.`);
+  }
+
+  const debuggee = { tabId };
+  let attached = false;
+  try {
+    await chrome.debugger.attach(debuggee, "1.3");
+    attached = true;
+    const { x, y } = response.click_point;
+    await chrome.debugger.sendCommand(debuggee, "Input.dispatchMouseEvent", {
+      type: "mouseMoved", x, y
+    });
+    await chrome.debugger.sendCommand(debuggee, "Input.dispatchMouseEvent", {
+      type: "mousePressed", x, y, button: "left", clickCount: 1
+    });
+    await chrome.debugger.sendCommand(debuggee, "Input.dispatchMouseEvent", {
+      type: "mouseReleased", x, y, button: "left", clickCount: 1
+    });
+  } finally {
+    if (attached) await chrome.debugger.detach(debuggee);
+  }
+
+  await pause(2000);
+  response = await chrome.tabs.sendMessage(tabId, {
+    type: "OPEN_TARGET_CHAT", expectedChat
+  });
+  if (!response?.ok) throw new Error(response?.error || `Could not open “${expectedChat}”.`);
   return response;
 }
 
@@ -55,7 +91,7 @@ async function runNextJob() {
     if (version?.version !== CAPTURE_PROTOCOL_VERSION) {
       throw new Error("WhatsApp capture extension/page version mismatch. Reload the extension and WhatsApp Web once.");
     }
-    await capture(tabId, "OPEN_TARGET_CHAT", job.expected_chat);
+    await openTargetChat(tabId, job.expected_chat);
     const incremental = await capture(tabId, "CAPTURE_INCREMENTAL", job.expected_chat, job.cutoff_at);
     const mediaResult = await receiverPost("/media-manifest", incremental.media_manifest);
     const captureResult = await receiverPost("/capture", incremental.payload);

@@ -1,5 +1,5 @@
 (() => {
-  const CAPTURE_PROTOCOL_VERSION = "0.6.6";
+  const CAPTURE_PROTOCOL_VERSION = "0.7.0";
   const clean = (value) => (value || "").replace(/[\u200e\u200f\u2060]/g, "").trim();
   const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -291,14 +291,20 @@
               || row?.querySelector('[data-testid="cell-frame-container"]');
             if (!cell) throw new Error(`Chat “${request.expectedChat}” is not visible in the chat list.`);
             cell.scrollIntoView({ block: "center" });
-            cell.focus();
-            const pointer = { bubbles: true, cancelable: true, composed: true, view: window };
-            cell.dispatchEvent(new PointerEvent("pointerdown", pointer));
-            cell.dispatchEvent(new MouseEvent("mousedown", pointer));
-            cell.dispatchEvent(new PointerEvent("pointerup", pointer));
-            cell.dispatchEvent(new MouseEvent("mouseup", pointer));
-            cell.dispatchEvent(new MouseEvent("click", pointer));
-            title = await waitForChatTitle(request.expectedChat);
+            const rect = cell.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) {
+              throw new Error(`Chat “${request.expectedChat}” is not currently clickable.`);
+            }
+            sendResponse({
+              ok: false,
+              needs_trusted_click: true,
+              click_point: {
+                x: rect.left + rect.width / 2,
+                y: rect.top + rect.height / 2
+              },
+              error: `A trusted click is required to open “${request.expectedChat}”.`
+            });
+            return;
           }
           if (title !== request.expectedChat) throw new Error(`Could not open “${request.expectedChat}”.`);
           sendResponse({ ok: true, chat_title: title });

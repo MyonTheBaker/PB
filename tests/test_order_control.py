@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -176,9 +177,13 @@ class OrderControlTests(unittest.TestCase):
         extension = Path(__file__).parents[1] / "whatsapp_order_exporter" / "extension"
         content = (extension / "content.js").read_text(encoding="utf-8")
         background = (extension / "background.js").read_text(encoding="utf-8")
-        self.assertIn("waitForChatTitle(request.expectedChat)", content)
+        manifest = json.loads((extension / "manifest.json").read_text(encoding="utf-8"))
         self.assertIn("cell-frame-container", content)
-        self.assertIn('new PointerEvent("pointerdown"', content)
+        self.assertIn("needs_trusted_click", content)
+        self.assertIn("chrome.debugger.attach", background)
+        self.assertIn('"Input.dispatchMouseEvent"', background)
+        self.assertIn("chrome.debugger.detach", background)
+        self.assertIn("debugger", manifest["permissions"])
         self.assertIn("await chrome.tabs.reload(tabId)", background)
 
 
