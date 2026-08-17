@@ -10,7 +10,7 @@ import urllib.request
 from pathlib import Path
 
 from order_email_ingest import sync as sync_email
-from email_order_processor import process_pending
+from email_order_processor import process_pending, regenerate_combined_overviews
 from whatsapp_order_exporter.import_browser_capture import import_capture
 
 
@@ -78,10 +78,11 @@ def refresh(root: Path, sources: list[str], automate_whatsapp: bool = False) -> 
                     automation_job = run_whatsapp_automation()
                 automatic_import = ((automation_job or {}).get("result") or {}).get("import")
                 imported = automatic_import if automatic_import and automatic_import.get("status") == "imported" else import_capture(root / "browser", root, None, None)
+                regenerate_combined_overviews(root)
                 results.append({
                     "source": source, "status": "ok",
-                    "message": (f"WhatsApp: imported {imported['messages']} message(s) and "
-                                f"{imported['media']} media file(s) from the latest capture"),
+                    "message": (f"WhatsApp: processed {imported['messages']} message(s) and "
+                                f"{imported['media']} media file(s); overview regenerated"),
                 })
             except SystemExit as exc:
                 detail = str(exc)

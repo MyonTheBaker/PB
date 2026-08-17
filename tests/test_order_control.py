@@ -138,6 +138,15 @@ class OrderControlTests(unittest.TestCase):
             self.assertIn("press Refresh", result["results"][0]["message"])
             self.assertNotIn("Capture WhatsApp", result["results"][0]["message"])
 
+    def test_whatsapp_refresh_regenerates_overview_after_import(self):
+        imported = {"status": "imported", "messages": 15, "media": 5}
+        with patch("order_source_refresh.import_capture", return_value=imported), \
+             patch("order_source_refresh.regenerate_combined_overviews") as regenerate:
+            result = refresh(Path("unused"), ["whatsapp"])
+        regenerate.assert_called_once_with(Path("unused"))
+        self.assertIn("processed 15 message(s)", result["results"][0]["message"])
+        self.assertIn("overview regenerated", result["results"][0]["message"])
+
     def test_whatsapp_automation_waits_for_completed_extension_job(self):
         responses = [
             {"job_id": "job-1"},

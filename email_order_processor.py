@@ -471,6 +471,31 @@ def build_combined_overviews(root: Path, affected_dates: set[str]) -> None:
     connection.close()
 
 
+def regenerate_combined_overviews(root: Path) -> int:
+    """Rebuild every relevant overview from the latest source synthesis."""
+    connection = sqlite3.connect(root / "order-control.sqlite3")
+    base = connection.execute(
+        "SELECT id FROM syntheses WHERE run_id NOT LIKE 'email-combined-%' ORDER BY rowid DESC LIMIT 1"
+    ).fetchone()
+    if not base:
+        connection.close()
+        return 0
+    dates = {
+        row[0] for row in connection.execute(
+            "SELECT DISTINCT fulfillment_date FROM order_items WHERE synthesis_id=? AND fulfillment_date IS NOT NULL",
+            (base[0],),
+        )
+    }
+    dates.update(
+        row[0] for row in connection.execute(
+            "SELECT DISTINCT fulfillment_date FROM canonical_orders WHERE fulfillment_date IS NOT NULL"
+        )
+    )
+    connection.close()
+    build_combined_overviews(root, dates)
+    return len(dates)
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
