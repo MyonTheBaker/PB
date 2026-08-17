@@ -178,6 +178,7 @@ class OrderControlTests(unittest.TestCase):
         background = (extension / "background.js").read_text(encoding="utf-8")
         self.assertIn("waitForChatTitle(request.expectedChat)", content)
         self.assertIn("cell-frame-container", content)
+        self.assertIn('new PointerEvent("pointerdown"', content)
         self.assertIn("await chrome.tabs.reload(tabId)", background)
 
 

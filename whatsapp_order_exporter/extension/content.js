@@ -1,5 +1,5 @@
 (() => {
-  const CAPTURE_PROTOCOL_VERSION = "0.6.5";
+  const CAPTURE_PROTOCOL_VERSION = "0.6.6";
   const clean = (value) => (value || "").replace(/[\u200e\u200f\u2060]/g, "").trim();
   const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -283,11 +283,21 @@
         let title = currentChatTitle();
         if (request.type === "OPEN_TARGET_CHAT") {
           if (title !== request.expectedChat) {
-            const target = [...document.querySelectorAll("span[title]")]
+            const chatList = document.querySelector("#pane-side") || document;
+            const target = [...chatList.querySelectorAll("span[title]")]
               .find((node) => node.getAttribute("title") === request.expectedChat);
-            const cell = target?.closest('[data-testid="cell-frame-container"]');
+            const row = target?.closest('[role="row"]');
+            const cell = row?.querySelector('[role="gridcell"][tabindex="0"]')
+              || row?.querySelector('[data-testid="cell-frame-container"]');
             if (!cell) throw new Error(`Chat “${request.expectedChat}” is not visible in the chat list.`);
-            cell.click();
+            cell.scrollIntoView({ block: "center" });
+            cell.focus();
+            const pointer = { bubbles: true, cancelable: true, composed: true, view: window };
+            cell.dispatchEvent(new PointerEvent("pointerdown", pointer));
+            cell.dispatchEvent(new MouseEvent("mousedown", pointer));
+            cell.dispatchEvent(new PointerEvent("pointerup", pointer));
+            cell.dispatchEvent(new MouseEvent("mouseup", pointer));
+            cell.dispatchEvent(new MouseEvent("click", pointer));
             title = await waitForChatTitle(request.expectedChat);
           }
           if (title !== request.expectedChat) throw new Error(`Could not open “${request.expectedChat}”.`);

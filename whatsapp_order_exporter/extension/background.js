@@ -1,5 +1,5 @@
 const RECEIVER = "http://127.0.0.1:8765";
-const CAPTURE_PROTOCOL_VERSION = "0.6.5";
+const CAPTURE_PROTOCOL_VERSION = "0.6.6";
 let working = false;
 const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
