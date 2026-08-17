@@ -46,6 +46,22 @@ class OrderControlTests(unittest.TestCase):
         self.assertEqual(order.fulfillment_time, "07:45")
         self.assertGreaterEqual(len(order.items), 2)
 
+    def test_oddle_completed_order_is_not_cancelled_by_action_link(self):
+        message = EmailMessage()
+        message["Subject"] = "# 000846 - Completed Delivery Order for 17 Aug 2026"
+        message.set_content(
+            "Completed Order - #000846\n"
+            "Fulfilled order on 12 Aug 2026 for *Chinny, Liew.*\n"
+            "Food to be Ready By: 17 Aug 2026 09:00 AM\n"
+            "2 x Assorted Flavoured Pretzel\n12 x Bircher Muesli\n"
+            "View Order\nCancel This Order"
+        )
+        order = extract_order(message.as_bytes(), "courier+sg@oddle.me", "2026-08-17T09:24:00+08:00")
+        self.assertEqual(order.external_order_id, "000846")
+        self.assertEqual(order.customer, "Chinny Liew")
+        self.assertEqual(order.status, "confirmed")
+        self.assertEqual(len(order.items), 2)
+
     def test_renderer_creates_png(self):
         with tempfile.TemporaryDirectory() as directory:
             connection = sqlite3.connect(":memory:")

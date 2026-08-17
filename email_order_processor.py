@@ -25,6 +25,7 @@ NON_ORDER_SUBJECTS = (
     "welcome", "confirmation code", "official gmail app", "tips for using",
 )
 ORDER_HINTS = ("order", "preorder", "pre-order", "food to be ready", "new order for")
+PARSER_VERSION = 2
 DATE_PATTERNS = (
     r"food\s+to\s+be\s+ready\s+by\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})\s+(\d{1,2}:\d{2}\s*[AP]M)",
     r"new\s+order\s+for\s+(?:pick\s*up|delivery).*?(\d{1,2}\s+[A-Za-z]+(?:\s+\d{4})?)\s*@\s*(\d{1,2}:\d{2}\s*[AP]M)",
@@ -148,7 +149,9 @@ def parse_items(text: str, tables: list[list[str]]) -> list[ExtractedItem]:
 
     def add(product: str, quantity: float, unit: str = "pcs") -> None:
         product = clean(product).strip("-–—:|$")
-        if len(product) < 2 or product.casefold() in {"quantity", "item name", "total", "subtotal"}:
+        if len(product) < 2 or product.casefold() in {
+            "quantity", "item name", "total", "subtotal", "delivery cost", "service fee", "tax",
+        }:
             return
         key = (product.casefold(), quantity)
         if key not in seen:
@@ -168,7 +171,7 @@ def parse_items(text: str, tables: list[list[str]]) -> list[ExtractedItem]:
         if quantity is not None and not re.search(r"item|product|description", cells[0], re.I):
             add(cells[0], quantity)
 
-    for line in text.splitlines():
+    for line in ([] if items else text.splitlines()):
         match = re.match(r"^\s*[-•]?\s*(\d+(?:\.\d+)?)\s*x\s+(.{2,100}?)\s*$", line, re.I)
         if match:
             add(match.group(2), float(match.group(1)))
@@ -201,19 +204,26 @@ def extract_order(raw: bytes, sender: str, sent_at: str | None) -> ExtractedOrde
     fulfillment_date, fulfillment_time = parse_datetime(text, reference)
     items = parse_items(text, tables)
     external = None
-    for pattern in (r"order\s*#\s*([A-Z0-9-]{4,})", r"order\s*(?:number|no\.?|id)\s*[:#]?\s*([A-Z0-9-]{4,})"):
+    for pattern in (r"order\s*(?:[-:]\s*)?#\s*([A-Z0-9-]{4,})",
+                    r"order\s*(?:number|no\.?|id)\s*[:#]?\s*([A-Z0-9-]{4,})"):
         match = re.search(pattern, text, re.I)
         if match:
             external = match.group(1).upper()
             break
     customer = None
-    for pattern in (r"(?:pending|confirmed|new)\s+order.*?\bfor\s+([^\n,.]{2,80}(?:,\s*[^\n.]{2,50})?)",
+    customer_text = text.replace("*", "")
+    for pattern in (r"fulfilled\s+order.*?\bfor\s+([^\n.]{2,100})",
+                    r"(?:pending|confirmed|new)\s+order.*?\bfor\s+([^\n,.]{2,80}(?:,\s*[^\n.]{2,50})?)",
                     r"customer(?:\s+name)?\s*[:\-]\s*([^\n]{2,100})"):
-        match = re.search(pattern, text, re.I)
+        match = re.search(pattern, customer_text, re.I)
         if match:
-            customer = clean(match.group(1)).strip(" ,.")
+            customer = clean(match.group(1)).strip(" ,.").replace(",", "")
             break
-    status = "cancelled" if re.search(r"\bcancel(?:led|ed|ation)?\b", subject + " " + text, re.I) else "confirmed"
+    cancellation_evidence = bool(
+        re.search(r"\bcancel(?:led|ed|ation)\b", subject, re.I)
+        or re.search(r"\b(?:order\s+(?:has\s+been\s+)?cancelled|cancelled\s+order)\b", text, re.I)
+    )
+    status = "cancelled" if cancellation_evidence else "confirmed"
     method = "delivery" if re.search(r"\bdeliver(?:y| to)\b", text, re.I) else "collection"
     has_hint = any(value in (subject + " " + text).casefold() for value in ORDER_HINTS)
     if not has_hint:
@@ -315,12 +325,22 @@ def process_pending(root: Path) -> dict:
     ensure_schema(connection)
     rows = connection.execute(
         """SELECT em.* FROM email_messages em LEFT JOIN email_order_processing ep
-           ON ep.email_message_id=em.id WHERE ep.email_message_id IS NULL ORDER BY em.uid"""
+           ON ep.email_message_id=em.id
+           WHERE ep.email_message_id IS NULL OR ep.parser_version<? ORDER BY em.uid""",
+        (PARSER_VERSION,),
     ).fetchall()
     counts = {"orders": 0, "review": 0, "ignored": 0, "duplicates": 0}
     affected_dates: set[str] = set()
     with connection:
         for row in rows:
+            prior_orders = connection.execute(
+                "SELECT id FROM canonical_orders WHERE source_email_id=?", (row["id"],)
+            ).fetchall()
+            for prior in prior_orders:
+                connection.execute("DELETE FROM order_reconciliation WHERE canonical_order_id=?", (prior["id"],))
+                connection.execute("DELETE FROM canonical_order_items WHERE order_id=?", (prior["id"],))
+            connection.execute("DELETE FROM canonical_orders WHERE source_email_id=?", (row["id"],))
+            connection.execute("DELETE FROM email_order_processing WHERE email_message_id=?", (row["id"],))
             raw = Path(row["raw_path"]).read_bytes()
             sender = " ".join(json.loads(row["from_json"]))
             order = extract_order(raw, sender, row["sent_at"])
@@ -355,8 +375,8 @@ def process_pending(root: Path) -> dict:
             else:
                 counts["ignored"] += 1
             connection.execute(
-                "INSERT INTO email_order_processing VALUES(?,?,?,?,?,1)",
-                (row["id"], order.classification, status, order.reason, now()),
+                "INSERT INTO email_order_processing VALUES(?,?,?,?,?,?)",
+                (row["id"], order.classification, status, order.reason, now(), PARSER_VERSION),
             )
     connection.close()
     if affected_dates:
