@@ -237,7 +237,6 @@ class OrderControlTower(QMainWindow):
             "border-radius: 7px; font-weight: 600;"
         )
         self.back_button.clicked.connect(self.back_to_control_tower)
-        heading.addWidget(self.back_button)
         title = QLabel("ORDER CONTROL TOWER")
         title.setStyleSheet("font-size: 25px; font-weight: 800; letter-spacing: 1px;")
         heading.addWidget(title)
@@ -247,18 +246,13 @@ class OrderControlTower(QMainWindow):
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.setStyleSheet("padding: 9px 22px; color: white; background: #b7362d; border: 0; border-radius: 7px; font-weight: 700;")
         self.refresh_button.clicked.connect(self.refresh_orders)
-        self.capture_button = QPushButton("Capture WhatsApp")
-        self.capture_button.setToolTip("Start the local receiver and open WhatsApp Web for supervised extraction")
-        self.capture_button.setStyleSheet("padding: 9px 16px; background: white; border: 1px solid #d5d1ca; border-radius: 7px; font-weight: 700;")
-        self.capture_button.clicked.connect(self.start_whatsapp_capture)
-        self.post_button = QPushButton("Post selected week")
+        self.post_button = QPushButton("Post week to WhatsApp")
         self.post_button.setToolTip("Prepare the overview currently displayed for an approved WhatsApp post")
         self.post_button.setStyleSheet("padding: 9px 16px; color: white; background: #207a5b; border: 0; border-radius: 7px; font-weight: 700;")
         self.post_button.clicked.connect(self.prepare_whatsapp_post)
-        heading.addWidget(self.capture_button)
-        heading.addWidget(self.post_button)
         heading.addWidget(self.source_selector)
         heading.addWidget(self.refresh_button)
+        heading.addWidget(self.post_button)
         outer.addLayout(heading)
 
         subheading = QHBoxLayout()
@@ -267,6 +261,7 @@ class OrderControlTower(QMainWindow):
         self.focus_label = QLabel()
         self.focus_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.focus_label.setStyleSheet("color: #6d655d;")
+        subheading.addWidget(self.back_button)
         subheading.addWidget(self.week_label)
         subheading.addStretch()
         subheading.addWidget(self.focus_label)
@@ -292,7 +287,7 @@ class OrderControlTower(QMainWindow):
         self.setCentralWidget(root)
 
         self.load_week()
-        QTimer.singleShot(0, self.refresh_orders)
+        QTimer.singleShot(0, lambda: self.refresh_orders(operator_initiated=False))
 
     def back_to_control_tower(self) -> None:
         write_navigation_request(NAVIGATION_REQUEST, 3)
@@ -304,7 +299,7 @@ class OrderControlTower(QMainWindow):
             "The main HR Control Tower could not be opened. This overview will remain open.",
         )
 
-    def start_whatsapp_capture(self) -> None:
+    def start_whatsapp_capture(self, show_instructions: bool = True) -> None:
         if not CAPTURE_RECEIVER.exists():
             QMessageBox.critical(self, "Capture unavailable", "The WhatsApp capture receiver is missing.")
             return
@@ -318,12 +313,13 @@ class OrderControlTower(QMainWindow):
                 return
         QDesktopServices.openUrl(WHATSAPP_WEB)
         self.status.setText("WhatsApp capture is ready. Open PB Advance Orders, then use the extension for full media and loaded history.")
-        QMessageBox.information(
-            self, "WhatsApp capture started",
-            "WhatsApp Web has been opened and the local receiver is running.\n\n"
-            "1. Open PB Advance Orders.\n2. Run Capture full media in the extension.\n"
-            "3. Run Capture loaded history.\n4. Return here and Refresh with WhatsApp enabled.",
-        )
+        if show_instructions:
+            QMessageBox.information(
+                self, "WhatsApp refresh started",
+                "WhatsApp Web has been opened and the local receiver is running.\n\n"
+                "1. Open PB Advance Orders.\n2. Run Capture full media in the extension.\n"
+                "3. Run Capture loaded history.\n4. Return here and press Refresh again to ingest it.",
+            )
 
     def prepare_whatsapp_post(self) -> None:
         report = self.report_for_week()
@@ -382,13 +378,15 @@ class OrderControlTower(QMainWindow):
         self.week_start += timedelta(days=7 * direction)
         self.load_week()
 
-    def refresh_orders(self) -> None:
+    def refresh_orders(self, _checked: bool = False, operator_initiated: bool = True) -> None:
         sources = self.source_selector.selected_sources()
         if not sources:
             self.status.setText("Select at least one source to refresh.")
             return
         if self.process and self.process.state() != QProcess.NotRunning:
             return
+        if operator_initiated and "whatsapp" in sources:
+            self.start_whatsapp_capture(show_instructions=True)
         self.refresh_button.setEnabled(False)
         self.source_selector.setEnabled(False)
         self.status.setText("Refreshing " + ", ".join(SOURCE_LABELS[key] for key in sources) + "…")

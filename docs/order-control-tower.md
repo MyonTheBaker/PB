@@ -19,10 +19,10 @@ The repository contains application code and sanitized configuration only. Mail,
 1. Start the application with `run_order_control_tower.cmd`.
 2. The initial view opens the week containing the next business day and starts a refresh automatically.
 3. Use the source selector to choose Email, WhatsApp, Web Crawler, or all sources.
-4. Select **Capture WhatsApp** to start the local receiver and open WhatsApp Web. Run full-media capture before loaded-history capture in the extension, then return to the tower.
-5. Select **Refresh** to ingest new evidence from the enabled sources.
+4. Tick WhatsApp, Email, and/or Web Crawler in the source selector.
+5. Select **Refresh** to run every selected source. When WhatsApp is selected, Refresh starts the receiver and opens WhatsApp Web; run full-media capture before loaded-history capture, then press Refresh again to ingest the completed capture.
 6. Use the left and right arrows to inspect earlier or later preorder weeks.
-7. Select **Post selected week** to approve the week currently displayed, copy that exact PNG to the clipboard, and open WhatsApp Web. Paste with `Ctrl+V`, verify the chat and preview, and press Send.
+7. Select **Post week to WhatsApp** to approve the week currently displayed, copy that exact PNG to the clipboard, and open WhatsApp Web. Paste with `Ctrl+V`, verify the chat and preview, and press Send.
 8. Use **Back to Control Tower** to return directly to the Pre-Orders page.
 9. Review any source conflicts or records held for operator review before relying on the overview.
 
