@@ -15,10 +15,25 @@ from order_control_tower import (
 )
 from order_report_renderer import formatted_product_lines, operation_time, order_card_fill, render_png, week_bounds
 from order_source_refresh import refresh, run_whatsapp_automation
+from whatsapp_order_processor import extract_provisional_orders
 from whatsapp_order_exporter.receiver import incremental_cutoff, initialise_database
 
 
 class OrderControlTests(unittest.TestCase):
+    def test_extracts_multi_date_eatfirst_availability_as_provisional_orders(self):
+        messages = [
+            {"id": "m1", "sent_at": "2026-08-18T18:02", "body": "availability for 26/8 - pick up 10:30 am & 27/08 - pick up 11am"},
+            {"id": "m2", "sent_at": "2026-08-18T18:03", "body": "EatFirst Lunch set collection for wed/Thu next week"},
+            {"id": "m3", "sent_at": "2026-08-18T18:04", "body": "Exact order TBD right now"},
+        ]
+        orders = extract_provisional_orders(messages)
+        self.assertEqual([(o.fulfillment_date, o.notes) for o in orders], [
+            ("2026-08-26", "Pickup 10:30 AM; exact order TBD"),
+            ("2026-08-27", "Pickup 11:00 AM; exact order TBD"),
+        ])
+        self.assertTrue(all(o.customer == "EatFirst" for o in orders))
+        self.assertTrue(all(o.product == "Lunch Set (details TBD)" for o in orders))
+
     def test_order_card_colors_follow_platform_and_fulfilment_rules(self):
         self.assertEqual(order_card_fill("CaterSpot ABCD-EFGH", "Delivery 8:00 AM"), "#FFF4DD")
         self.assertEqual(order_card_fill("EatFirst", "Delivery 11:30 AM"), "#FFF4DD")

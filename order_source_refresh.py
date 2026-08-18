@@ -12,6 +12,7 @@ from pathlib import Path
 from order_email_ingest import sync as sync_email
 from email_order_processor import process_pending, regenerate_combined_overviews
 from whatsapp_order_exporter.import_browser_capture import import_capture
+from whatsapp_order_processor import process_whatsapp_run
 
 
 VALID_SOURCES = {"whatsapp", "email", "web"}
@@ -78,11 +79,13 @@ def refresh(root: Path, sources: list[str], automate_whatsapp: bool = False) -> 
                     automation_job = run_whatsapp_automation()
                 automatic_import = ((automation_job or {}).get("result") or {}).get("import")
                 imported = automatic_import if automatic_import and automatic_import.get("status") == "imported" else import_capture(root / "browser", root, None, None)
+                provisional = process_whatsapp_run(root, imported["run_id"]) if imported.get("run_id") else 0
                 regenerate_combined_overviews(root)
                 results.append({
                     "source": source, "status": "ok",
-                    "message": (f"WhatsApp: processed {imported['messages']} message(s) and "
-                                f"{imported['media']} media file(s); overview regenerated"),
+                    "message": (f"WhatsApp: processed {imported['messages']} message(s), "
+                                f"{imported['media']} media file(s), and {provisional} provisional order(s); "
+                                "overview regenerated"),
                 })
             except SystemExit as exc:
                 detail = str(exc)
