@@ -112,3 +112,6 @@ def audit(root: Path, run_id: str, result: dict | None, metadata: dict | None, e
             json.dumps((metadata or {}).get("usage", {})), error,
         ))
     connection.close()
+    if result is not None:
+        from order_review_queue import enqueue
+        enqueue(root, run_id, result.get("orders", []))

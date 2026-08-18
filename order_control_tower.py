@@ -12,12 +12,18 @@ import uuid
 from datetime import date, timedelta
 from pathlib import Path
 
-from PyQt5.QtCore import QProcess, QSettings, Qt, QTimer
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtCore import QProcess, QSettings, Qt, QTimer, QUrl
+from PyQt5.QtGui import QDesktopServices, QPixmap
 from PyQt5.QtWidgets import (
-    QApplication, QCheckBox, QFrame, QHBoxLayout, QLabel, QMainWindow,
-    QMessageBox, QPushButton, QScrollArea, QToolButton, QVBoxLayout, QWidget,
+    QApplication, QCheckBox, QDialog, QFormLayout, QFrame, QHBoxLayout, QLabel,
+    QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton,
+    QScrollArea, QTextEdit, QToolButton, QVBoxLayout, QWidget,
 )
+
+from order_review_queue import approve as approve_review
+from order_review_queue import dismiss as dismiss_review
+from order_review_queue import pending as pending_reviews
+from order_review_queue import pending_count
 
 
 PROJECT = Path(__file__).resolve().parent
@@ -215,6 +221,97 @@ class OverviewScrollArea(QScrollArea):
         self.overview.fit_width(self.viewport().width())
 
 
+class UncertainOrdersDialog(QDialog):
+    def __init__(self, parent) -> None:
+        super().__init__(parent)
+        self.tower = parent
+        self.rows: dict[int, dict] = {}
+        self.setWindowTitle("Validate uncertain orders")
+        self.resize(920, 620)
+        layout = QHBoxLayout(self)
+        self.list = QListWidget()
+        self.list.currentItemChanged.connect(self.load_selected)
+        layout.addWidget(self.list, 2)
+        editor = QVBoxLayout()
+        form = QFormLayout()
+        self.customer, self.fulfillment_date = QLineEdit(), QLineEdit()
+        self.product, self.notes = QTextEdit(), QTextEdit()
+        self.product.setMaximumHeight(120); self.notes.setMaximumHeight(110)
+        self.evidence = QTextEdit(); self.evidence.setReadOnly(True); self.evidence.setMaximumHeight(150)
+        form.addRow("Customer/platform", self.customer)
+        form.addRow("Order", self.product)
+        form.addRow("Date (YYYY-MM-DD)", self.fulfillment_date)
+        form.addRow("Notes/time", self.notes)
+        form.addRow("Evidence", self.evidence)
+        self.open_evidence_button = QPushButton("Open attached evidence")
+        self.open_evidence_button.clicked.connect(self.open_evidence)
+        form.addRow("", self.open_evidence_button)
+        editor.addLayout(form); editor.addStretch()
+        actions = QHBoxLayout()
+        dismiss_button, approve_button = QPushButton("Dismiss"), QPushButton("Approve order")
+        dismiss_button.clicked.connect(self.dismiss_selected)
+        approve_button.clicked.connect(self.approve_selected)
+        approve_button.setStyleSheet("padding: 9px 16px; color: white; background: #207a5b; font-weight: 700;")
+        actions.addWidget(dismiss_button); actions.addStretch(); actions.addWidget(approve_button)
+        editor.addLayout(actions); layout.addLayout(editor, 3)
+        self.reload()
+
+    def reload(self) -> None:
+        self.list.clear()
+        self.rows = {row["id"]: row for row in pending_reviews(DATA_ROOT)}
+        for row in self.rows.values():
+            item = QListWidgetItem(f"{row['fulfillment_date'] or 'Date TBD'} · {row['customer']}\n{row['product']} · {row['confidence']:.0%}")
+            item.setData(Qt.UserRole, row["id"]); self.list.addItem(item)
+        if self.list.count(): self.list.setCurrentRow(0)
+        else: self.evidence.setPlainText("No uncertain orders remain.")
+        self.tower.update_review_count()
+
+    def selected(self) -> dict | None:
+        item = self.list.currentItem()
+        return self.rows.get(item.data(Qt.UserRole)) if item else None
+
+    def load_selected(self, current, _previous) -> None:
+        row = self.rows.get(current.data(Qt.UserRole)) if current else None
+        if not row: return
+        self.customer.setText(row["customer"]); self.product.setPlainText(row["product"])
+        self.fulfillment_date.setText(row["fulfillment_date"] or ""); self.notes.setPlainText(row["notes"])
+        source_ids = json.loads(row["source_ids_json"])
+        connection = sqlite3.connect(DATA_ROOT / "order-control.sqlite3")
+        placeholders = ",".join("?" for _ in source_ids)
+        messages = connection.execute(
+            f"SELECT sent_at,sender,body FROM messages WHERE id IN ({placeholders}) ORDER BY sent_at", source_ids
+        ).fetchall() if source_ids else []
+        media = connection.execute(
+            f"SELECT local_path FROM media WHERE message_id IN ({placeholders})", source_ids
+        ).fetchall() if source_ids else []
+        connection.close()
+        row["media_paths"] = [value[0] for value in media]
+        evidence = [f"Confidence {row['confidence']:.0%}"]
+        evidence.extend(f"{sent_at or ''} · {sender or 'Unknown'}\n{body}" for sent_at, sender, body in messages)
+        self.evidence.setPlainText("\n\n".join(evidence))
+        self.open_evidence_button.setEnabled(bool(row["media_paths"]))
+
+    def open_evidence(self) -> None:
+        row = self.selected()
+        if row and row.get("media_paths"):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(row["media_paths"][0]))
+
+    def dismiss_selected(self) -> None:
+        row = self.selected()
+        if row and QMessageBox.question(self, "Dismiss candidate", "Dismiss this candidate as not an order?") == QMessageBox.Yes:
+            dismiss_review(DATA_ROOT, row["id"]); self.reload()
+
+    def approve_selected(self) -> None:
+        row = self.selected()
+        if not row: return
+        try:
+            approve_review(DATA_ROOT, row["id"], self.customer.text(), self.product.toPlainText(),
+                           self.fulfillment_date.text().strip(), self.notes.toPlainText())
+        except ValueError as exc:
+            QMessageBox.warning(self, "Cannot approve", str(exc)); return
+        self.tower.load_week(); self.reload()
+
+
 class SourceSelector(QWidget):
     def __init__(self, settings: QSettings | None = None) -> None:
         super().__init__()
@@ -305,10 +402,16 @@ class OrderControlTower(QMainWindow):
         self.status.setWordWrap(True)
         self.status.setFrameShape(QFrame.NoFrame)
         self.status.setStyleSheet("padding: 8px 2px; color: #625b53;")
-        outer.addWidget(self.status)
+        bottom = QHBoxLayout()
+        bottom.addWidget(self.status, 1)
+        self.review_button = QPushButton()
+        self.review_button.clicked.connect(self.open_review_queue)
+        bottom.addWidget(self.review_button)
+        outer.addLayout(bottom)
         self.setCentralWidget(root)
 
         self.load_week()
+        self.update_review_count()
         QTimer.singleShot(0, lambda: self.refresh_orders(operator_initiated=False))
 
     def back_to_control_tower(self) -> None:
@@ -395,6 +498,17 @@ class OrderControlTower(QMainWindow):
         self.week_start += timedelta(days=7 * direction)
         self.load_week()
 
+    def update_review_count(self) -> None:
+        count = pending_count(DATA_ROOT)
+        self.review_button.setText(f"Uncertain orders ({count})")
+        self.review_button.setStyleSheet(
+            "padding: 9px 16px; border-radius: 7px; font-weight: 700; "
+            + ("color: white; background: #b36b00;" if count else "background: white; border: 1px solid #d5d1ca;")
+        )
+
+    def open_review_queue(self) -> None:
+        UncertainOrdersDialog(self).exec_()
+
     def refresh_orders(self, _checked: bool = False, operator_initiated: bool = True) -> None:
         sources = self.source_selector.selected_sources()
         if not sources:
@@ -430,6 +544,7 @@ class OrderControlTower(QMainWindow):
         self.refresh_button.setEnabled(True)
         self.source_selector.setEnabled(True)
         self.load_week()
+        self.update_review_count()
 
     def refresh_error(self, _error) -> None:
         self.status.setText("The source refresh process could not be started.")

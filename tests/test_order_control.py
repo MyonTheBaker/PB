@@ -17,10 +17,25 @@ from order_report_renderer import formatted_product_lines, operation_time, order
 from order_source_refresh import refresh, run_whatsapp_automation
 from whatsapp_order_processor import extract_provisional_orders
 from llm_order_extractor import validate_result
+from order_review_queue import dismiss, enqueue, pending
 from whatsapp_order_exporter.receiver import incremental_cutoff, initialise_database
 
 
 class OrderControlTests(unittest.TestCase):
+    def test_uncertain_order_queue_persists_and_resolves_candidates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sqlite3.connect(root / "order-control.sqlite3").close()
+            candidate = {"customer": "Marie", "product": "Order details TBD",
+                         "fulfillment_date": "2026-08-18", "notes": "Photo evidence",
+                         "confidence": 0.82, "source_message_ids": ["m1"]}
+            self.assertEqual(enqueue(root, "run-1", [candidate]), 1)
+            self.assertEqual(enqueue(root, "run-1", [candidate]), 0)
+            rows = pending(root)
+            self.assertEqual(len(rows), 1)
+            dismiss(root, rows[0]["id"])
+            self.assertEqual(pending(root), [])
+
     def test_llm_result_validation_rejects_untraceable_orders(self):
         result = validate_result({"orders": [
             {"customer": "EatFirst", "product": "Lunch Set", "fulfillment_date": "2026-08-26",
