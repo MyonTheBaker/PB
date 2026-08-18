@@ -16,10 +16,23 @@ from order_control_tower import (
 from order_report_renderer import formatted_product_lines, operation_time, order_card_fill, render_png, week_bounds
 from order_source_refresh import refresh, run_whatsapp_automation
 from whatsapp_order_processor import extract_provisional_orders
+from llm_order_extractor import validate_result
 from whatsapp_order_exporter.receiver import incremental_cutoff, initialise_database
 
 
 class OrderControlTests(unittest.TestCase):
+    def test_llm_result_validation_rejects_untraceable_orders(self):
+        result = validate_result({"orders": [
+            {"customer": "EatFirst", "product": "Lunch Set", "fulfillment_date": "2026-08-26",
+             "status": "provisional", "notes": "Pickup 10:30 AM", "confidence": 0.95,
+             "source_message_ids": ["known"]},
+            {"customer": "Invented", "product": "Unknown", "fulfillment_date": "2026-08-27",
+             "status": "confirmed", "notes": "", "confidence": 0.99,
+             "source_message_ids": ["missing"]},
+        ], "unresolved": []}, {"known"})
+        self.assertEqual(len(result["orders"]), 1)
+        self.assertEqual(result["orders"][0]["customer"], "EatFirst")
+
     def test_extracts_multi_date_eatfirst_availability_as_provisional_orders(self):
         messages = [
             {"id": "m1", "sent_at": "2026-08-18T18:02", "body": "availability for 26/8 - pick up 10:30 am & 27/08 - pick up 11am"},

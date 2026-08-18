@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from llm_order_extractor import audit, extract_orders
+
 
 PLATFORMS = ("CaterSpot", "EatFirst", "WhyQ", "Feeds", "SmartBites", "Oddle", "Grab", "Foodpanda")
 DATE_TIME_RE = re.compile(
@@ -27,6 +29,8 @@ class ProvisionalOrder:
     fulfillment_date: str
     notes: str
     source_message_ids: tuple[str, ...]
+    status: str = "provisional"
+    confidence: float = 0.9
 
 
 def extract_provisional_orders(messages: list[dict]) -> list[ProvisionalOrder]:
@@ -67,9 +71,20 @@ def process_whatsapp_run(root: Path, run_id: str) -> int:
     connection = sqlite3.connect(root / "order-control.sqlite3")
     connection.row_factory = sqlite3.Row
     messages = [dict(row) for row in connection.execute(
-        "SELECT id,sent_at,body FROM messages WHERE run_id=? ORDER BY ordinal", (run_id,)
+        "SELECT id,sent_at,sender,body FROM messages WHERE run_id=? ORDER BY ordinal", (run_id,)
     )]
-    candidates = extract_provisional_orders(messages)
+    try:
+        model_result, metadata = extract_orders(messages)
+        audit(root, run_id, model_result, metadata, None)
+        candidates = [ProvisionalOrder(
+            customer=order["customer"], product=order["product"],
+            fulfillment_date=order["fulfillment_date"], notes=order["notes"],
+            source_message_ids=tuple(order["source_message_ids"]), status=order["status"],
+            confidence=order["confidence"],
+        ) for order in model_result["orders"] if order["confidence"] >= 0.9]
+    except Exception as exc:
+        audit(root, run_id, None, None, str(exc))
+        candidates = extract_provisional_orders(messages)
     base = connection.execute(
         "SELECT id FROM syntheses WHERE run_id NOT LIKE 'email-combined-%' ORDER BY rowid DESC LIMIT 1"
     ).fetchone()
@@ -103,7 +118,7 @@ def process_whatsapp_run(root: Path, run_id: str) -> int:
             connection.execute(
                 "INSERT INTO order_items VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                 (str(uuid.uuid4()), synthesis_id, order.customer, order.product, None, None,
-                 order.fulfillment_date, "provisional", order.notes, 0.9,
+                 order.fulfillment_date, order.status, order.notes, order.confidence,
                  json.dumps(order.source_message_ids)),
             )
     connection.close()
