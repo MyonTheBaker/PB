@@ -322,7 +322,9 @@ class UncertainOrdersDialog(QDialog):
                            self.fulfillment_date.text().strip(), self.notes.toPlainText())
         except ValueError as exc:
             QMessageBox.warning(self, "Cannot approve", str(exc)); return
-        self.tower.load_week(); self.reload()
+        self.tower.load_week()
+        self.tower.update_review_count()
+        self.accept()
 
 
 class SourceSelector(QWidget):
