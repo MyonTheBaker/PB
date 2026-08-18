@@ -278,13 +278,26 @@ class UncertainOrdersDialog(QDialog):
         source_ids = json.loads(row["source_ids_json"])
         connection = sqlite3.connect(DATA_ROOT / "order-control.sqlite3")
         placeholders = ",".join("?" for _ in source_ids)
-        messages = connection.execute(
-            f"SELECT sent_at,sender,body FROM messages WHERE id IN ({placeholders}) ORDER BY sent_at", source_ids
-        ).fetchall() if source_ids else []
-        media = connection.execute(
-            f"SELECT local_path FROM media WHERE message_id IN ({placeholders})", source_ids
-        ).fetchall() if source_ids else []
-        connection.close()
+        try:
+            messages = connection.execute(
+                f"SELECT sent_at,sender,body FROM messages WHERE id IN ({placeholders}) ORDER BY sent_at", source_ids
+            ).fetchall() if source_ids else []
+            media = connection.execute(
+                f"SELECT stored_path FROM media WHERE message_id IN ({placeholders})", source_ids
+            ).fetchall() if source_ids else []
+            if source_ids and not media:
+                media = connection.execute(
+                    f"""SELECT DISTINCT x.stored_path FROM messages current
+                        JOIN messages previous ON previous.run_id=current.run_id
+                         AND previous.ordinal=current.ordinal-1
+                        JOIN media x ON x.message_id=previous.id
+                        WHERE current.id IN ({placeholders})""", source_ids,
+                ).fetchall()
+        except sqlite3.Error as exc:
+            messages, media = [], []
+            self.evidence.setPlainText(f"Evidence could not be loaded: {exc}")
+        finally:
+            connection.close()
         row["media_paths"] = [value[0] for value in media]
         evidence = [f"Confidence {row['confidence']:.0%}"]
         evidence.extend(f"{sent_at or ''} · {sender or 'Unknown'}\n{body}" for sent_at, sender, body in messages)
