@@ -126,6 +126,12 @@ class OrderControlTests(unittest.TestCase):
         minutes, label, notes = operation_time("Delivery 7:45 AM; loading bay")
         self.assertEqual((minutes, label, notes), (465, "7:45 AM", "loading bay"))
 
+    def test_operation_time_accepts_natural_pickup_wording(self):
+        self.assertEqual(operation_time("Pickup at 12:00 PM; photo details"),
+                         (720, "12:00 PM", "photo details"))
+        self.assertEqual(operation_time("Pickup time: 12:00 PM; photo details"),
+                         (720, "12:00 PM", "photo details"))
+
     def test_plain_text_order_extraction(self):
         message = EmailMessage()
         message["Subject"] = "New Order #ODD-42"

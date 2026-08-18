@@ -143,6 +143,7 @@ def week_bounds(as_of: date, offset: int) -> tuple[date, date]:
 
 OPERATION_TIME_RE = re.compile(
     r"(?P<label>Food ready|Self-collection|Collection|Pickup|Delivery)\s+"
+    r"(?:(?:at\s+)|(?:time\s*:\s*))?"
     r"(?P<time>\d{1,2}(?::\d{2})?(?:\s*[-–]\s*\d{1,2}(?::\d{2})?)?\s*(?:AM|PM))",
     re.IGNORECASE,
 )
